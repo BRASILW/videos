@@ -23,7 +23,9 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 ## Funcoes
 
-Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/ban`, `/poll`, `/ticket`, `/close`, `/role`, `/play`, `/skip` e `/stop`.
+Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
+
+Musica usa prefixo: `m!c nome da musica`, `m!skip` e `m!stop`. O bot pesquisa pelo nome e toca a faixa encontrada no YouTube; links do YouTube tambem sao aceitos. Plataformas como Spotify fornecem metadados, nao o audio, entao o bot procura uma versao equivalente disponivel para reproducao.
 
 O comando `/ask` usa IA somente quando `OPENAI_API_KEY` estiver configurada. `LOG_CHANNEL_ID` ativa logs de mensagens apagadas e moderacao. O anti-spam aplica timeout de 30 segundos apos seis mensagens em dez segundos.
 

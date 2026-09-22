@@ -70,11 +70,14 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
   new SlashCommandBuilder().setName('ask').setDescription('Pergunta para a IA, se configurada.')
     .addStringOption(option => option.setName('pergunta').setDescription('Sua pergunta').setRequired(true)),
-  new SlashCommandBuilder().setName('play').setDescription('Toca uma URL de audio no canal de voz.')
-    .addStringOption(option => option.setName('url').setDescription('URL do YouTube ou fonte suportada').setRequired(true)),
-  new SlashCommandBuilder().setName('skip').setDescription('Pula a musica atual.'),
-  new SlashCommandBuilder().setName('stop').setDescription('Para a musica e sai do canal.')
 ].map(command => command.toJSON());
+
+async function resolveTrack(input) {
+  if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(input)) return { url: input, title: input };
+  const results = await play.search(input, { limit: 1, source: { youtube: 'video' } });
+  if (!results.length) throw new Error('Musica nao encontrada.');
+  return { url: results[0].url, title: results[0].title };
+}
 
 async function playNext(guildId) {
   const queue = musicQueues.get(guildId);
@@ -87,11 +90,24 @@ async function playNext(guildId) {
   try {
     const stream = await play.stream(item.url, { quality: 2 });
     queue.player.play(createAudioResource(stream.stream, { inputType: stream.type }));
-    await queue.textChannel.send(`Tocando: ${item.url}`);
+    await queue.textChannel.send(`Tocando: ${item.title || item.url}`);
   } catch (error) {
     await queue.textChannel.send(`Nao foi possivel tocar essa URL: ${error.message}`);
     await playNext(guildId);
   }
+}
+
+function getMusicQueue(guildId, voiceChannel, textChannel) {
+  let queue = musicQueues.get(guildId);
+  if (queue) return queue;
+  const connection = joinVoiceChannel({ channelId: voiceChannel.id, guildId, adapterCreator: voiceChannel.guild.voiceAdapterCreator });
+  const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
+  connection.subscribe(player);
+  queue = { connection, player, items: [], textChannel };
+  musicQueues.set(guildId, queue);
+  player.on(AudioPlayerStatus.Idle, () => playNext(guildId));
+  connection.on(VoiceConnectionStatus.Disconnected, () => musicQueues.delete(guildId));
+  return queue;
 }
 
 async function registerCommands(userId) {
@@ -235,6 +251,35 @@ client.on(Events.MessageCreate, async message => {
     spamHistory.delete(message.author.id);
   }
   if (message.content.trim().toLowerCase() === '!ping') await message.reply('Pong!');
+
+  const [command, ...args] = message.content.trim().split(/\s+/);
+  const musicCommand = command.toLowerCase();
+  if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
+  const voiceChannel = message.member.voice.channel;
+  if (!voiceChannel) return message.reply('Entre em um canal de voz primeiro.');
+  const queue = getMusicQueue(message.guild.id, voiceChannel, message.channel);
+
+  if (musicCommand === 'm!c') {
+    const query = args.join(' ');
+    if (!query) return message.reply('Use: `m!c nome da musica`');
+    try {
+      const track = await resolveTrack(query);
+      queue.items.push(track);
+      if (queue.player.state.status === AudioPlayerStatus.Idle) await playNext(message.guild.id);
+      return message.reply(`Adicionada: **${track.title}**`);
+    } catch (error) {
+      return message.reply(`Nao encontrei essa musica: ${error.message}`);
+    }
+  }
+  if (musicCommand === 'm!skip') {
+    queue.player.stop();
+    return message.reply('Musica pulada.');
+  }
+  queue.items = [];
+  queue.player.stop();
+  queue.connection.destroy();
+  musicQueues.delete(message.guild.id);
+  return message.reply('Musica parada.');
 });
 
 client.on(Events.MessageDelete, message => {
