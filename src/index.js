@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 
 const {
   ActionRowBuilder,
@@ -39,6 +40,12 @@ const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
   auth: process.env.LAVALINK_PASSWORD || 'free',
   secure: process.env.LAVALINK_SECURE !== 'false'
 }], { reconnectTries: 5, reconnectInterval: 5 });
+
+const healthServer = http.createServer((request, response) => {
+  response.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+  response.end('Discord bot online');
+});
+healthServer.listen(Number(process.env.PORT) || 3000, '0.0.0.0');
 
 lavalink.on('error', (name, error) => console.error(`Erro no node Lavalink ${name}:`, error.message));
 lavalink.on('ready', name => console.log(`Node Lavalink conectado: ${name}`));
