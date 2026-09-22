@@ -35,6 +35,7 @@ const client = new Client({
 
 const spamHistory = new Map();
 const musicQueues = new Map();
+const processedMusicMessages = new Set();
 const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
   name: 'public',
   url: `${process.env.LAVALINK_HOST || 'lavalink-v4.triniumhost.com'}:${process.env.LAVALINK_PORT || '443'}`,
@@ -295,20 +296,18 @@ client.on(Events.MessageCreate, async message => {
   const [command, ...args] = message.content.trim().split(/\s+/);
   const musicCommand = command.toLowerCase();
   if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
+  if (processedMusicMessages.has(message.id)) return;
+  processedMusicMessages.add(message.id);
+  setTimeout(() => processedMusicMessages.delete(message.id), 60000);
   const voiceChannel = message.member.voice.channel;
   if (!voiceChannel) return message.reply('Entre em um canal de voz primeiro.');
-  let queue;
-  try {
-    queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
-  } catch (error) {
-    return message.reply(`O servidor de musica esta indisponivel no momento: ${error.message}`);
-  }
 
   if (musicCommand === 'm!c') {
     const query = args.join(' ');
     if (!query) return message.reply('Use: `m!c nome da musica`');
     try {
       const track = await resolveTrack(query);
+      const queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
       queue.items.push(track);
       const position = queue.items.length;
       const playbackError = position === 1 ? await playNext(message.guild.id) : null;
@@ -316,6 +315,12 @@ client.on(Events.MessageCreate, async message => {
     } catch (error) {
       return message.reply(`Nao encontrei essa musica: ${error.message}`);
     }
+  }
+  let queue;
+  try {
+    queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
+  } catch (error) {
+    return message.reply(`O servidor de musica esta indisponivel no momento: ${error.message}`);
   }
   if (musicCommand === 'm!skip') {
     await queue.player.stopTrack();
