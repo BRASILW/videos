@@ -36,6 +36,7 @@ const client = new Client({
 const spamHistory = new Map();
 const musicQueues = new Map();
 const processedMusicMessages = new Set();
+const aiChannelId = '1551729250615304304';
 
 async function safeReply(message, content) {
   try {
@@ -44,6 +45,28 @@ async function safeReply(message, content) {
     if (error.code !== 10008 && error.code !== 50035) console.error('Nao foi possivel responder a mensagem:', error.message);
     return null;
   }
+}
+
+async function askAI(prompt) {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Responda em portugues brasileiro de forma clara, educada e objetiva.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 600
+    }),
+    signal: AbortSignal.timeout(30000)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || 'A API de IA recusou a solicitacao.');
+  return data.choices?.[0]?.message?.content?.trim() || 'Nao consegui gerar uma resposta.';
 }
 const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
   name: 'public',
@@ -314,7 +337,18 @@ client.on(Events.MessageCreate, async message => {
 
     const [command, ...args] = message.content.trim().split(/\s+/);
     const musicCommand = command.toLowerCase();
-    if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
+    const isMusicCommand = ['m!c', 'm!skip', 'm!stop'].includes(musicCommand);
+    if (message.channel.id === aiChannelId && !isMusicCommand && !message.content.startsWith('!ping')) {
+      if (!process.env.OPENAI_API_KEY) return safeReply(message, 'A IA ainda nao foi configurada neste bot.');
+      try {
+        const answer = await askAI(message.content);
+        return safeReply(message, answer.slice(0, 1900));
+      } catch (error) {
+        console.error('Erro na IA:', error.message);
+        return safeReply(message, 'Nao consegui responder agora. Tente novamente em alguns segundos.');
+      }
+    }
+    if (!isMusicCommand) return;
     if (processedMusicMessages.has(message.id)) return;
     processedMusicMessages.add(message.id);
     setTimeout(() => processedMusicMessages.delete(message.id), 60000);
