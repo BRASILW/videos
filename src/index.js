@@ -74,16 +74,27 @@ const commands = [
 
 async function resolveTrack(input) {
   if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(input)) return { url: input, title: input };
-  const results = await play.search(input, { limit: 1, source: { youtube: 'video' } });
+  let query = input;
+  if (/open\.spotify\.com\//i.test(input)) {
+    const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(input)}`);
+    if (!response.ok) throw new Error('Nao foi possivel ler esse link do Spotify.');
+    const metadata = await response.json();
+    query = `${metadata.title || ''} ${metadata.author_name || ''}`.trim();
+  }
+  const results = await play.search(query, { limit: 5 });
   if (!results.length) throw new Error('Musica nao encontrada.');
-  return { url: results[0].url, title: results[0].title };
+  const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 2);
+  const best = results.sort((first, second) => {
+    const score = result => queryWords.reduce((total, word) => total + (result.title.toLowerCase().includes(word) ? 1 : 0), 0);
+    return score(second) - score(first);
+  })[0];
+  return { url: best.url, title: best.title };
 }
 
 async function playNext(guildId) {
   const queue = musicQueues.get(guildId);
   if (!queue || queue.items.length === 0) {
-    queue?.connection.destroy();
-    musicQueues.delete(guildId);
     return;
   }
   const item = queue.items.shift();
