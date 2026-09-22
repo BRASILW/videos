@@ -25,10 +25,6 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
 
-Musica usa prefixo: `m!c nome da musica`, `m!skip` e `m!stop`. O bot pesquisa varios resultados e escolhe o mais proximo mesmo com erros de digitacao. Links do YouTube sao aceitos; links do Spotify sao lidos para obter titulo e artista e entao buscar uma versao equivalente disponivel para reproducao. Plataformas como Spotify fornecem metadados, nao o audio.
-
-A reproducao usa Lavalink v4 via Shoukaku. Para usar outro node, configure `LAVALINK_HOST`, `LAVALINK_PORT`, `LAVALINK_PASSWORD` e `LAVALINK_SECURE`. Nodes publicos podem ficar indisponiveis ou trocar credenciais.
-
 No canal `1551729250615304304`, o bot responde automaticamente as mensagens usando `OPENAI_API_KEY`. Configure essa chave no ambiente do Render; ela nunca deve ser enviada ao GitHub.
 
 O comando `/ask` usa IA somente quando `OPENAI_API_KEY` estiver configurada. `LOG_CHANNEL_ID` ativa logs de mensagens apagadas e moderacao. O anti-spam aplica timeout de 30 segundos apos seis mensagens em dez segundos.
