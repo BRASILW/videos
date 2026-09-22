@@ -116,7 +116,13 @@ function getMusicQueue(guildId, voiceChannel, textChannel) {
   queue = { connection, player, items: [], textChannel };
   musicQueues.set(guildId, queue);
   player.on(AudioPlayerStatus.Idle, () => playNext(guildId));
-  connection.on(VoiceConnectionStatus.Disconnected, () => musicQueues.delete(guildId));
+  connection.on(VoiceConnectionStatus.Disconnected, async () => {
+    try {
+      await connection.rejoin();
+    } catch (error) {
+      console.error('Nao foi possivel reconectar ao canal de voz:', error.message);
+    }
+  });
   return queue;
 }
 
