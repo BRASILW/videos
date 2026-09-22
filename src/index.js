@@ -36,6 +36,15 @@ const client = new Client({
 const spamHistory = new Map();
 const musicQueues = new Map();
 const processedMusicMessages = new Set();
+
+async function safeReply(message, content) {
+  try {
+    return await message.reply(content);
+  } catch (error) {
+    if (error.code !== 10008 && error.code !== 50035) console.error('Nao foi possivel responder a mensagem:', error.message);
+    return null;
+  }
+}
 const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
   name: 'public',
   url: `${process.env.LAVALINK_HOST || 'lavalink-v4.triniumhost.com'}:${process.env.LAVALINK_PORT || '443'}`,
@@ -292,55 +301,61 @@ client.on(Events.InteractionCreate, async interaction => {
 
 client.on(Events.MessageCreate, async message => {
   if (message.author.bot || !message.guild) return;
-  const now = Date.now();
-  const history = (spamHistory.get(message.author.id) || []).filter(time => now - time < 10000);
-  history.push(now);
-  spamHistory.set(message.author.id, history);
-  if (history.length >= 6 && message.member.moderatable) {
-    await message.member.timeout(30000, 'Anti-spam').catch(() => {});
-    spamHistory.delete(message.author.id);
-  }
-  if (message.content.trim().toLowerCase() === '!ping') await message.reply('Pong!');
-
-  const [command, ...args] = message.content.trim().split(/\s+/);
-  const musicCommand = command.toLowerCase();
-  if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
-  if (processedMusicMessages.has(message.id)) return;
-  processedMusicMessages.add(message.id);
-  setTimeout(() => processedMusicMessages.delete(message.id), 60000);
-  const voiceChannel = message.member.voice.channel;
-  if (!voiceChannel) return message.reply('Entre em um canal de voz primeiro.');
-
-  if (musicCommand === 'm!c') {
-    const query = args.join(' ');
-    if (!query) return message.reply('Use: `m!c nome da musica`');
-    try {
-      const track = await resolveTrack(query);
-      const queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
-      queue.items.push(track);
-      const position = queue.items.length;
-      const playbackError = position === 1 ? await playNext(message.guild.id) : null;
-      return message.reply({ embeds: [createTrackEmbed(track, position, message.author, playbackError)] });
-    } catch (error) {
-      return message.reply(`Nao encontrei essa musica: ${error.message}`);
-    }
-  }
-  let queue;
   try {
-    queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
-  } catch (error) {
-    return message.reply(`O servidor de musica esta indisponivel no momento: ${error.message}`);
-  }
-  if (musicCommand === 'm!skip') {
+    const now = Date.now();
+    const history = (spamHistory.get(message.author.id) || []).filter(time => now - time < 10000);
+    history.push(now);
+    spamHistory.set(message.author.id, history);
+    if (history.length >= 6 && message.member.moderatable) {
+      await message.member.timeout(30000, 'Anti-spam').catch(() => {});
+      spamHistory.delete(message.author.id);
+    }
+    if (message.content.trim().toLowerCase() === '!ping') await safeReply(message, 'Pong!');
+
+    const [command, ...args] = message.content.trim().split(/\s+/);
+    const musicCommand = command.toLowerCase();
+    if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
+    if (processedMusicMessages.has(message.id)) return;
+    processedMusicMessages.add(message.id);
+    setTimeout(() => processedMusicMessages.delete(message.id), 60000);
+    const voiceChannel = message.member.voice.channel;
+    if (!voiceChannel) return safeReply(message, 'Entre em um canal de voz primeiro.');
+
+    if (musicCommand === 'm!c') {
+      const query = args.join(' ');
+      if (!query) return safeReply(message, 'Use: `m!c nome da musica`');
+      try {
+        const track = await resolveTrack(query);
+        const queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
+        queue.items.push(track);
+        const position = queue.items.length;
+        const playbackError = position === 1 ? await playNext(message.guild.id) : null;
+        return safeReply(message, { embeds: [createTrackEmbed(track, position, message.author, playbackError)] });
+      } catch (error) {
+        return safeReply(message, `Nao encontrei essa musica: ${error.message}`);
+      }
+    }
+    let queue;
+    try {
+      queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
+    } catch (error) {
+      return safeReply(message, `O servidor de musica esta indisponivel no momento: ${error.message}`);
+    }
+    if (musicCommand === 'm!skip') {
+      await queue.player.stopTrack();
+      return safeReply(message, 'Musica pulada.');
+    }
+    queue.items = [];
     await queue.player.stopTrack();
-    return message.reply('Musica pulada.');
+    await lavalink.leaveVoiceChannel(message.guild.id);
+    musicQueues.delete(message.guild.id);
+    return safeReply(message, 'Musica parada.');
+  } catch (error) {
+    console.error('Erro ao processar mensagem:', error.message);
   }
-  queue.items = [];
-  await queue.player.stopTrack();
-  await lavalink.leaveVoiceChannel(message.guild.id);
-  musicQueues.delete(message.guild.id);
-  return message.reply('Musica parada.');
 });
+
+client.on('error', error => console.error('Erro do cliente Discord:', error.message));
 
 client.on(Events.MessageDelete, message => {
   if (!message.guild || message.author?.bot || !process.env.LOG_CHANNEL_ID) return;
