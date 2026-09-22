@@ -90,10 +90,9 @@ async function playNext(guildId) {
   try {
     const stream = await play.stream(item.url, { quality: 2 });
     queue.player.play(createAudioResource(stream.stream, { inputType: stream.type }));
-    await queue.textChannel.send(`Tocando: ${item.title || item.url}`);
+    await queue.textChannel.send(`Tocando agora:\n${item.url}\n**${item.title || 'Musica'}**`);
   } catch (error) {
-    await queue.textChannel.send(`Nao foi possivel tocar essa URL: ${error.message}`);
-    await playNext(guildId);
+    await queue.textChannel.send(`Nao foi possivel reproduzir esta faixa:\n${item.url}\n**${item.title || 'Musica'}**\nMotivo: ${error.message}`);
   }
 }
 
