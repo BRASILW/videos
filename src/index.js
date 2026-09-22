@@ -7,6 +7,7 @@ const {
   ButtonStyle,
   ChannelType,
   Client,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   PermissionFlagsBits,
@@ -93,7 +94,35 @@ async function resolveTrack(input) {
   const result = await node.rest.resolve(identifier);
   const track = result?.data?.[0] || result?.data;
   if (!track?.encoded) throw new Error('Musica nao encontrada no Lavalink.');
-  return { encoded: track.encoded, url: track.info?.uri || input, title: track.info?.title || query };
+  return {
+    encoded: track.encoded,
+    url: track.info?.uri || input,
+    title: track.info?.title || query,
+    duration: track.info?.length || 0,
+    artworkUrl: track.info?.artworkUrl || null
+  };
+}
+
+function formatDuration(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function createTrackEmbed(track, position, user) {
+  const embed = new EmbedBuilder()
+    .setColor(0x5865f2)
+    .setTitle('Musica adicionada')
+    .addFields(
+      { name: 'Musica', value: `[${track.title}](${track.url})`, inline: false },
+      { name: 'Duracao', value: formatDuration(track.duration), inline: true },
+      { name: 'Posicao na fila', value: String(position), inline: true },
+      { name: 'Solicitada por', value: user.toString(), inline: false }
+    )
+    .setTimestamp();
+  if (track.artworkUrl) embed.setThumbnail(track.artworkUrl);
+  return embed;
 }
 
 async function playNext(guildId) {
@@ -280,8 +309,9 @@ client.on(Events.MessageCreate, async message => {
     try {
       const track = await resolveTrack(query);
       queue.items.push(track);
-      if (queue.items.length === 1) await playNext(message.guild.id);
-      return message.reply(`Adicionada: **${track.title}**`);
+      const position = queue.items.length;
+      if (position === 1) await playNext(message.guild.id);
+      return message.reply({ embeds: [createTrackEmbed(track, position, message.author)] });
     } catch (error) {
       return message.reply(`Nao encontrei essa musica: ${error.message}`);
     }
