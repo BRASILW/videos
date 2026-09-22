@@ -21,6 +21,14 @@ O bot responde `Pong!` quando alguem envia `!ping`.
 
 Nunca compartilhe o token e nunca o envie para o Git.
 
+## Funcoes
+
+Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/ban`, `/poll`, `/ticket`, `/close`, `/role`, `/play`, `/skip` e `/stop`.
+
+O comando `/ask` usa IA somente quando `OPENAI_API_KEY` estiver configurada. `LOG_CHANNEL_ID` ativa logs de mensagens apagadas e moderacao. O anti-spam aplica timeout de 30 segundos apos seis mensagens em dez segundos.
+
+No Discord Developer Portal, ative **Message Content Intent**, **Server Members Intent** e conceda ao bot permissoes de gerenciamento, voz e canais conforme os comandos usados.
+
 ## Executar com Docker
 
 ```powershell
