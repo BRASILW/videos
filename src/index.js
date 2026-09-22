@@ -96,6 +96,10 @@ async function playNext(guildId) {
 
 async function registerCommands(userId) {
   const rest = new REST({ version: '10' }).setToken(token);
+  if (process.env.GUILD_ID) {
+    await rest.put(Routes.applicationGuildCommands(userId, process.env.GUILD_ID), { body: commands });
+    return;
+  }
   const route = Routes.applicationCommands(userId);
   const existing = await rest.get(route);
   const preservedCommands = existing.filter(command => command.type !== 1);

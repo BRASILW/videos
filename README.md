@@ -29,6 +29,8 @@ O comando `/ask` usa IA somente quando `OPENAI_API_KEY` estiver configurada. `LO
 
 No Discord Developer Portal, ative **Message Content Intent**, **Server Members Intent** e conceda ao bot permissoes de gerenciamento, voz e canais conforme os comandos usados.
 
+Para os comandos `/` aparecerem imediatamente, configure `GUILD_ID` com o ID do seu servidor. Sem essa variavel, os comandos sao globais e podem levar ate uma hora para aparecer.
+
 ## Executar com Docker
 
 ```powershell
