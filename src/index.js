@@ -13,16 +13,7 @@ const {
   Routes,
   SlashCommandBuilder
 } = require('discord.js');
-const {
-  AudioPlayerStatus,
-  NoSubscriberBehavior,
-  VoiceConnectionStatus,
-  createAudioPlayer,
-  createAudioResource,
-  entersState,
-  joinVoiceChannel
-} = require('@discordjs/voice');
-const play = require('play-dl');
+const { Connectors, Shoukaku } = require('shoukaku');
 
 const token = process.env.DISCORD_TOKEN;
 if (!token) {
@@ -42,6 +33,15 @@ const client = new Client({
 
 const spamHistory = new Map();
 const musicQueues = new Map();
+const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
+  name: 'public',
+  url: `${process.env.LAVALINK_HOST || 'lavalink.jirayu.net'}:${process.env.LAVALINK_PORT || '443'}`,
+  auth: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
+  secure: process.env.LAVALINK_SECURE !== 'false'
+}], { reconnectTries: 5, reconnectInterval: 5 });
+
+lavalink.on('error', (name, error) => console.error(`Erro no node Lavalink ${name}:`, error.message));
+lavalink.on('ready', name => console.log(`Node Lavalink conectado: ${name}`));
 
 const commands = [
   new SlashCommandBuilder().setName('ping').setDescription('Verifica se o bot esta online.'),
@@ -73,7 +73,6 @@ const commands = [
 ].map(command => command.toJSON());
 
 async function resolveTrack(input) {
-  if (/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\//i.test(input)) return { url: input, title: input };
   let query = input;
   if (/open\.spotify\.com\//i.test(input)) {
     const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(input)}`);
@@ -81,15 +80,13 @@ async function resolveTrack(input) {
     const metadata = await response.json();
     query = `${metadata.title || ''} ${metadata.author_name || ''}`.trim();
   }
-  const results = await play.search(query, { limit: 5 });
-  if (!results.length) throw new Error('Musica nao encontrada.');
-  const normalizedQuery = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const queryWords = normalizedQuery.split(/\s+/).filter(word => word.length > 2);
-  const best = results.sort((first, second) => {
-    const score = result => queryWords.reduce((total, word) => total + (result.title.toLowerCase().includes(word) ? 1 : 0), 0);
-    return score(second) - score(first);
-  })[0];
-  return { url: best.url, title: best.title };
+  const node = lavalink.nodes.get('public');
+  if (!node) throw new Error('O node Lavalink ainda nao esta conectado.');
+  const identifier = /^https?:\/\//i.test(query) ? query : `ytsearch:${query}`;
+  const result = await node.rest.resolve(identifier);
+  const track = result?.data?.[0] || result?.data;
+  if (!track?.encoded) throw new Error('Musica nao encontrada no Lavalink.');
+  return { encoded: track.encoded, url: track.info?.uri || input, title: track.info?.title || query };
 }
 
 async function playNext(guildId) {
@@ -99,30 +96,20 @@ async function playNext(guildId) {
   }
   const item = queue.items.shift();
   try {
-    const stream = await play.stream(item.url, { quality: 2 });
-    queue.player.play(createAudioResource(stream.stream, { inputType: stream.type }));
+    await queue.player.playTrack({ track: { encoded: item.encoded } });
     await queue.textChannel.send(`Tocando agora:\n${item.url}\n**${item.title || 'Musica'}**`);
   } catch (error) {
     await queue.textChannel.send(`Nao foi possivel reproduzir esta faixa:\n${item.url}\n**${item.title || 'Musica'}**\nMotivo: ${error.message}`);
   }
 }
 
-function getMusicQueue(guildId, voiceChannel, textChannel) {
+async function getMusicQueue(guildId, voiceChannel, textChannel) {
   let queue = musicQueues.get(guildId);
   if (queue) return queue;
-  const connection = joinVoiceChannel({ channelId: voiceChannel.id, guildId, adapterCreator: voiceChannel.guild.voiceAdapterCreator });
-  const player = createAudioPlayer({ behaviors: { noSubscriber: NoSubscriberBehavior.Pause } });
-  connection.subscribe(player);
-  queue = { connection, player, items: [], textChannel };
+  const player = await lavalink.joinVoiceChannel({ guildId, channelId: voiceChannel.id, shardId: 0, deaf: true });
+  queue = { player, items: [], textChannel };
   musicQueues.set(guildId, queue);
-  player.on(AudioPlayerStatus.Idle, () => playNext(guildId));
-  connection.on(VoiceConnectionStatus.Disconnected, async () => {
-    try {
-      await connection.rejoin();
-    } catch (error) {
-      console.error('Nao foi possivel reconectar ao canal de voz:', error.message);
-    }
-  });
+  player.on('end', () => playNext(guildId));
   return queue;
 }
 
@@ -273,7 +260,12 @@ client.on(Events.MessageCreate, async message => {
   if (!['m!c', 'm!skip', 'm!stop'].includes(musicCommand)) return;
   const voiceChannel = message.member.voice.channel;
   if (!voiceChannel) return message.reply('Entre em um canal de voz primeiro.');
-  const queue = getMusicQueue(message.guild.id, voiceChannel, message.channel);
+  let queue;
+  try {
+    queue = await getMusicQueue(message.guild.id, voiceChannel, message.channel);
+  } catch (error) {
+    return message.reply(`O servidor de musica esta indisponivel no momento: ${error.message}`);
+  }
 
   if (musicCommand === 'm!c') {
     const query = args.join(' ');
@@ -281,19 +273,19 @@ client.on(Events.MessageCreate, async message => {
     try {
       const track = await resolveTrack(query);
       queue.items.push(track);
-      if (queue.player.state.status === AudioPlayerStatus.Idle) await playNext(message.guild.id);
+      if (queue.items.length === 1) await playNext(message.guild.id);
       return message.reply(`Adicionada: **${track.title}**`);
     } catch (error) {
       return message.reply(`Nao encontrei essa musica: ${error.message}`);
     }
   }
   if (musicCommand === 'm!skip') {
-    queue.player.stop();
+    await queue.player.stopTrack();
     return message.reply('Musica pulada.');
   }
   queue.items = [];
-  queue.player.stop();
-  queue.connection.destroy();
+  await queue.player.stopTrack();
+  await lavalink.leaveVoiceChannel(message.guild.id);
   musicQueues.delete(message.guild.id);
   return message.reply('Musica parada.');
 });
