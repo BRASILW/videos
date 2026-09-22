@@ -20,3 +20,12 @@ npm start
 O bot responde `Pong!` quando alguem envia `!ping`.
 
 Nunca compartilhe o token e nunca o envie para o Git.
+
+## Executar com Docker
+
+```powershell
+docker build -t discord-bot .
+docker run -d --name discord-bot --restart unless-stopped --env DISCORD_TOKEN=seu_token_novo discord-bot
+```
+
+Em uma VPS, instale Docker, copie o projeto, execute esses comandos e mantenha o servidor ligado. O token deve ser informado diretamente como variavel de ambiente.
