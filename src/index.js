@@ -35,8 +35,8 @@ const spamHistory = new Map();
 const musicQueues = new Map();
 const lavalink = new Shoukaku(new Connectors.DiscordJS(client), [{
   name: 'public',
-  url: `${process.env.LAVALINK_HOST || 'lavalink.jirayu.net'}:${process.env.LAVALINK_PORT || '443'}`,
-  auth: process.env.LAVALINK_PASSWORD || 'youshallnotpass',
+  url: `${process.env.LAVALINK_HOST || 'lavalink-v4.triniumhost.com'}:${process.env.LAVALINK_PORT || '443'}`,
+  auth: process.env.LAVALINK_PASSWORD || 'free',
   secure: process.env.LAVALINK_SECURE !== 'false'
 }], { reconnectTries: 5, reconnectInterval: 5 });
 
