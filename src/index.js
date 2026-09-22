@@ -165,10 +165,18 @@ client.on(Events.MessageCreate, async message => {
     }
     if (message.content.trim().toLowerCase() === '!ping') return safeReply(message, 'Pong!');
     if (message.channel.id !== aiChannelId || processedAiMessages.has(message.id)) return;
+    const mentionsBot = client.user && message.mentions.has(client.user.id);
+    let repliesToBot = false;
+    if (message.reference?.messageId) {
+      const referencedMessage = await message.fetchReference().catch(() => null);
+      repliesToBot = referencedMessage?.author?.id === client.user?.id;
+    }
+    if (!mentionsBot && !repliesToBot) return;
     processedAiMessages.add(message.id);
     setTimeout(() => processedAiMessages.delete(message.id), 60000);
     if (!process.env.OPENAI_API_KEY) return safeReply(message, 'A IA ainda nao foi configurada. Adicione OPENAI_API_KEY no Render.');
-    return safeReply(message, (await askAI(message.content)).slice(0, 1900));
+    const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim() || 'Responda a esta mensagem.';
+    return safeReply(message, (await askAI(prompt)).slice(0, 1900));
   } catch (error) { console.error('Erro ao processar mensagem:', error.message); }
 });
 
