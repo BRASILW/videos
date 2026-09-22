@@ -36,6 +36,7 @@ const client = new Client({
 const spamHistory = new Map();
 const musicQueues = new Map();
 const processedMusicMessages = new Set();
+const processedAiMessages = new Set();
 const aiChannelId = '1551729250615304304';
 
 async function safeReply(message, content) {
@@ -339,6 +340,9 @@ client.on(Events.MessageCreate, async message => {
     const musicCommand = command.toLowerCase();
     const isMusicCommand = ['m!c', 'm!skip', 'm!stop'].includes(musicCommand);
     if (message.channel.id === aiChannelId && !isMusicCommand && !message.content.startsWith('!ping')) {
+      if (processedAiMessages.has(message.id)) return;
+      processedAiMessages.add(message.id);
+      setTimeout(() => processedAiMessages.delete(message.id), 60000);
       if (!process.env.OPENAI_API_KEY) return safeReply(message, 'A IA ainda nao foi configurada neste bot.');
       try {
         const answer = await askAI(message.content);
