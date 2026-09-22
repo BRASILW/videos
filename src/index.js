@@ -83,11 +83,13 @@ const commands = [
 
 async function resolveTrack(input) {
   let query = input;
+  let sourceArtwork = null;
   if (/open\.spotify\.com\//i.test(input)) {
     const response = await fetch(`https://open.spotify.com/oembed?url=${encodeURIComponent(input)}`);
     if (!response.ok) throw new Error('Nao foi possivel ler esse link do Spotify.');
     const metadata = await response.json();
     query = `${metadata.title || ''} ${metadata.author_name || ''}`.trim();
+    sourceArtwork = metadata.thumbnail_url || null;
   }
   const node = lavalink.nodes.get('public');
   if (!node) throw new Error('O node Lavalink ainda nao esta conectado.');
@@ -100,8 +102,13 @@ async function resolveTrack(input) {
     url: track.info?.uri || input,
     title: track.info?.title || query,
     duration: track.info?.length || 0,
-    artworkUrl: track.info?.artworkUrl || null
+    artworkUrl: track.info?.artworkUrl || sourceArtwork || getYouTubeArtwork(track.info?.uri)
   };
+}
+
+function getYouTubeArtwork(url) {
+  const videoId = url?.match(/[?&]v=([^&]+)/)?.[1] || url?.match(/youtu\.be\/([^?]+)/)?.[1];
+  return videoId ? `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` : null;
 }
 
 function formatDuration(milliseconds) {
@@ -148,6 +155,8 @@ async function getMusicQueue(guildId, voiceChannel, textChannel) {
   queue = { player, items: [], textChannel };
   musicQueues.set(guildId, queue);
   player.on('end', () => playNext(guildId));
+  player.on('exception', event => console.error(`Erro ao tocar musica em ${guildId}:`, event.exception?.message || event));
+  player.on('stuck', event => console.error(`Faixa travada em ${guildId}:`, event));
   return queue;
 }
 
