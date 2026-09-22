@@ -110,7 +110,7 @@ function formatDuration(milliseconds) {
   return `${minutes}:${seconds}`;
 }
 
-function createTrackEmbed(track, position, user) {
+function createTrackEmbed(track, position, user, playbackError = null) {
   const embed = new EmbedBuilder()
     .setColor(0x5865f2)
     .setTitle('Musica adicionada')
@@ -121,6 +121,7 @@ function createTrackEmbed(track, position, user) {
       { name: 'Solicitada por', value: user.toString(), inline: false }
     )
     .setTimestamp();
+  if (playbackError) embed.addFields({ name: 'Status', value: `Nao foi possivel iniciar: ${playbackError}` });
   if (track.artworkUrl) embed.setThumbnail(track.artworkUrl);
   return embed;
 }
@@ -133,9 +134,9 @@ async function playNext(guildId) {
   const item = queue.items.shift();
   try {
     await queue.player.playTrack({ track: { encoded: item.encoded } });
-    await queue.textChannel.send(`Tocando agora:\n${item.url}\n**${item.title || 'Musica'}**`);
+    return null;
   } catch (error) {
-    await queue.textChannel.send(`Nao foi possivel reproduzir esta faixa:\n${item.url}\n**${item.title || 'Musica'}**\nMotivo: ${error.message}`);
+    return error.message;
   }
 }
 
@@ -310,8 +311,8 @@ client.on(Events.MessageCreate, async message => {
       const track = await resolveTrack(query);
       queue.items.push(track);
       const position = queue.items.length;
-      if (position === 1) await playNext(message.guild.id);
-      return message.reply({ embeds: [createTrackEmbed(track, position, message.author)] });
+      const playbackError = position === 1 ? await playNext(message.guild.id) : null;
+      return message.reply({ embeds: [createTrackEmbed(track, position, message.author, playbackError)] });
     } catch (error) {
       return message.reply(`Nao encontrei essa musica: ${error.message}`);
     }
