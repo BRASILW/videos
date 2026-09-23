@@ -1,0 +1,8 @@
+[
+  {
+    "command": "/testar",
+    "prompt": "arrume meu codigo tire a duplicacao, faca que todos os comandos seja ! ao inves de / faca que a mensagem do bot seja apenas visual para quem usou o comand",
+    "autoMode": true,
+    "hybridMode": true
+  }
+]

@@ -18,10 +18,10 @@ function buildFormMessage() {
     .setTitle('📋 Sistema de Formulário')
     .setDescription(
       'Clique no botão abaixo para abrir o formulário.\n\n' +
-        'O formulário possui 2 etapas:\n' +
-        '1️⃣ Nome e Idade\n' +
-        '2️⃣ Motivo / Relato\n' +
-        'Suas respostas serão registradas pela staff.'
+      'O formulário possui 2 etapas:\n' +
+      '1️⃣ Nome e Idade\n' +
+      '2️⃣ Motivo / Relato\n' +
+      'Suas respostas serão registradas pela staff.'
     );
 
   const row = new ActionRowBuilder().addComponents(
