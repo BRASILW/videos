@@ -7,6 +7,8 @@ const {
   SlashCommandBuilder
 } = require('discord.js');
 
+const formulario = require('./commands/formulario');
+
 const token = process.env.DISCORD_TOKEN;
 const aiChannelId = '1551729250615304304';
 const spamHistory = new Map();
@@ -57,7 +59,8 @@ const commands = [
       .addRoleOption(option => option.setName('cargo').setDescription('Cargo').setRequired(true)))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageRoles),
   new SlashCommandBuilder().setName('ask').setDescription('Pergunta para a IA.')
-    .addStringOption(option => option.setName('pergunta').setDescription('Pergunta').setRequired(true))
+    .addStringOption(option => option.setName('pergunta').setDescription('Pergunta').setRequired(true)),
+  new SlashCommandBuilder().setName('formulario').setDescription('Envia o painel do sistema de formulario com botoes.')
 ].map(command => command.toJSON());
 
 async function safeReply(message, content) {
@@ -99,13 +102,16 @@ client.once(Events.ClientReady, async readyClient => {
 });
 
 client.on(Events.InteractionCreate, async interaction => {
-  if (interaction.isButton()) {
-    if (interaction.customId === 'poll_yes' || interaction.customId === 'poll_no') return interaction.reply({ content: 'Voto registrado.', ephemeral: true });
-    return;
-  }
-  if (!interaction.isChatInputCommand() || !interaction.guild) return;
   try {
+    if (interaction.isButton() && interaction.customId.startsWith('form_')) return await formulario.handleComponent(interaction);
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('form_modal_')) return await formulario.handleModal(interaction);
+    if (interaction.isButton()) {
+      if (interaction.customId === 'poll_yes' || interaction.customId === 'poll_no') return interaction.reply({ content: 'Voto registrado.', ephemeral: true });
+      return;
+    }
+    if (!interaction.isChatInputCommand() || !interaction.guild) return;
     if (interaction.commandName === 'ping') return interaction.reply('Pong!');
+      if (interaction.commandName === 'formulario') return await formulario.execute(interaction);
     if (interaction.commandName === 'clear') {
       const deleted = await interaction.channel.bulkDelete(interaction.options.getInteger('quantidade'), true);
       return interaction.reply({ content: `${deleted.size} mensagens apagadas.`, ephemeral: true });
@@ -152,9 +158,10 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.editReply(await askAI(interaction.options.getString('pergunta')));
     }
   } catch (error) {
-    console.error('Erro no comando:', error.message);
+    console.error('Erro na interacao:', error.message);
     const reply = { content: 'Ocorreu um erro ao executar esse comando.', ephemeral: true };
-    if (interaction.deferred || interaction.replied) await interaction.editReply(reply).catch(() => {}); else await interaction.reply(reply).catch(() => {});
+    if (interaction.isRepliable() && (interaction.deferred || interaction.replied)) await interaction.editReply(reply).catch(() => {});
+    else if (interaction.isRepliable()) await interaction.reply(reply).catch(() => {});
   }
 });
 
