@@ -12,6 +12,11 @@ const aiChannelId = '1551729250615304304';
 const spamHistory = new Map();
 const processedAiMessages = new Set();
 
+function hasOpenAIKey() {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  return Boolean(key && key.startsWith('sk-') && !key.includes('opcional'));
+}
+
 if (!token) {
   console.error('Defina DISCORD_TOKEN no ambiente antes de iniciar o bot.');
   process.exit(1);
@@ -90,6 +95,7 @@ async function registerCommands(userId) {
 client.once(Events.ClientReady, async readyClient => {
   try { await registerCommands(readyClient.user.id); } catch (error) { console.error('Nao foi possivel registrar comandos:', error.message); }
   console.log(`Bot conectado como ${readyClient.user.tag}`);
+  console.log(`IA configurada: ${hasOpenAIKey() ? 'sim' : 'nao'}`);
 });
 
 client.on(Events.InteractionCreate, async interaction => {
@@ -141,7 +147,7 @@ client.on(Events.InteractionCreate, async interaction => {
       return interaction.reply('Cargo atualizado com sucesso.');
     }
     if (interaction.commandName === 'ask') {
-      if (!process.env.OPENAI_API_KEY) return interaction.reply({ content: 'Configure OPENAI_API_KEY no Render.', ephemeral: true });
+      if (!hasOpenAIKey()) return interaction.reply({ content: 'Configure OPENAI_API_KEY no Render e faça um novo deploy.', ephemeral: true });
       await interaction.deferReply();
       return interaction.editReply(await askAI(interaction.options.getString('pergunta')));
     }
@@ -174,7 +180,7 @@ client.on(Events.MessageCreate, async message => {
     if (!mentionsBot && !repliesToBot) return;
     processedAiMessages.add(message.id);
     setTimeout(() => processedAiMessages.delete(message.id), 60000);
-    if (!process.env.OPENAI_API_KEY) return safeReply(message, 'A IA ainda nao foi configurada. Adicione OPENAI_API_KEY no Render.');
+    if (!hasOpenAIKey()) return safeReply(message, 'A IA ainda nao foi configurada. No Render, use KEY=OPENAI_API_KEY e coloque a chave no campo VALUE. Depois faça Save, rebuild, and deploy.');
     const prompt = message.content.replace(new RegExp(`<@!?${client.user.id}>`, 'g'), '').trim() || 'Responda a esta mensagem.';
     return safeReply(message, (await askAI(prompt)).slice(0, 1900));
   } catch (error) { console.error('Erro ao processar mensagem:', error.message); }
