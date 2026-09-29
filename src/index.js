@@ -208,6 +208,8 @@ const RULES_CHANNEL_ID =
 const RULES_CONFIG_FILE =
   path.join(__dirname, 'rules-panel-config.json');
 
+let rulesPanelConfigLoadedFromFile = false;
+
 let rulesPanelConfig = {
   title: '📜 Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
@@ -225,6 +227,7 @@ try {
       ...rulesPanelConfig,
       ...JSON.parse(fs.readFileSync(RULES_CONFIG_FILE, 'utf8'))
     };
+    rulesPanelConfigLoadedFromFile = true;
   }
 } catch (e) {
   console.warn('[Rules] Erro ao carregar configuração:', e.message);
@@ -246,9 +249,14 @@ function isRulesPanelAdmin(member) {
 }
 
 function buildRulesPanelPayload() {
+  const descriptionParts = [
+    String(rulesPanelConfig.description || '').trim(),
+    String(rulesPanelConfig.rulesText || '').trim()
+  ].filter(Boolean);
+
   const embed = createEmbed({
     title: rulesPanelConfig.title || '📜 Regras do Servidor',
-    description: `${rulesPanelConfig.description || ''}\n\n${rulesPanelConfig.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
+    description: (descriptionParts.join('\\n\\n') || 'Nenhuma regra configurada.').slice(0, 4096),
     color: rulesPanelConfig.color || '#5865F2',
     footer: rulesPanelConfig.footer || undefined
   });
@@ -275,6 +283,79 @@ function buildRulesPanelPayload() {
   };
 }
 
+function isRulesPanelMessage(message) {
+  if (!message?.author || message.author.id !== client.user?.id) return false;
+  const hasEmbed = Boolean(message.embeds?.length);
+  const hasRulesButton = message.components?.some(row =>
+    row.components?.some(component => component.customId === 'rules_admin_edit')
+  );
+  return hasEmbed && hasRulesButton;
+}
+
+function isLikelyCustomizedRulesMessage(message) {
+  if (!isRulesPanelMessage(message)) return false;
+  const embed = message.embeds?.[0];
+  if (!embed) return false;
+  const defaultTitle = '📜 Regras do Servidor';
+  const defaultDescription = 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.\\n\\n1️⃣ Respeite todos os membros.\\n\\n2️⃣ Não faça spam ou flood.\\n\\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\\n\\n4️⃣ Use cada canal para sua finalidade.\\n\\n5️⃣ Siga as regras do Discord e as orientações da equipe.';
+  const defaultFooter = 'Leia com atenção antes de participar.';
+  return Boolean(
+    String(embed.title || '') !== defaultTitle ||
+    String(embed.description || '') !== defaultDescription ||
+    String(embed.footer?.text || '') !== defaultFooter ||
+    embed.image?.url ||
+    embed.thumbnail?.url
+  );
+}
+
+function hydrateRulesConfigFromMessage(message) {
+  const embed = message?.embeds?.[0];
+  if (!embed) return false;
+
+  const combinedDescription = String(embed.description || '').trim();
+  rulesPanelConfig.title = String(embed.title || '📜 Regras do Servidor');
+  rulesPanelConfig.description = '';
+  rulesPanelConfig.rulesText = combinedDescription || 'Nenhuma regra configurada.';
+  rulesPanelConfig.color = embed.hexColor || rulesPanelConfig.color || '#5865F2';
+  rulesPanelConfig.footer = String(embed.footer?.text || '');
+  rulesPanelConfig.banner = String(embed.image?.url || '');
+  rulesPanelConfig.icon = String(embed.thumbnail?.url || '');
+  rulesPanelConfig.messageId = message.id;
+  rulesPanelConfigLoadedFromFile = true;
+  saveRulesPanelConfig();
+  console.log(`[Rules] Configuração recuperada do painel existente ${message.id}.`);
+  return true;
+}
+
+async function findExistingRulesPanel(channel) {
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages?.size) return null;
+
+  const panels = [...messages.values()].filter(isRulesPanelMessage);
+  if (!panels.length) return null;
+
+  if (!rulesPanelConfigLoadedFromFile) {
+    const customized = panels.filter(isLikelyCustomizedRulesMessage)
+      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+    if (customized.length) return customized[0];
+  }
+
+  return panels.sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
+}
+
+async function cleanupDuplicateRulesPanels(channel, keepMessageId) {
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages?.size) return;
+
+  const duplicates = [...messages.values()].filter(message =>
+    isRulesPanelMessage(message) && message.id !== keepMessageId
+  );
+
+  for (const message of duplicates) {
+    await message.delete().catch(() => {});
+  }
+}
+
 async function refreshRulesPanel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES_CHANNEL_ID).catch(() => null);
@@ -285,25 +366,43 @@ async function refreshRulesPanel(guild) {
 
   const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
   const permissions = me ? channel.permissionsFor(me) : null;
-  if (permissions && !permissions.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.EmbedLinks])) {
+  if (permissions && !permissions.has([
+    PermissionFlagsBits.ViewChannel,
+    PermissionFlagsBits.SendMessages,
+    PermissionFlagsBits.ReadMessageHistory,
+    PermissionFlagsBits.EmbedLinks
+  ])) {
     const missing = [
       [PermissionFlagsBits.ViewChannel, 'Ver canal'],
       [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
       [PermissionFlagsBits.ReadMessageHistory, 'Ver histórico de mensagens'],
-      [PermissionFlagsBits.ManageMessages, 'Gerenciar mensagens'],
       [PermissionFlagsBits.EmbedLinks, 'Incorporar links']
     ].filter(([flag]) => !permissions.has(flag)).map(([, name]) => name);
     throw Object.assign(new Error(`Permissões ausentes: ${missing.join(', ')}`), { code: 50013, missing });
   }
 
+  let panel = null;
   if (rulesPanelConfig.messageId) {
-    const old = await channel.messages.fetch(rulesPanelConfig.messageId).catch(() => null);
-    if (old) await old.delete();
+    panel = await channel.messages.fetch(rulesPanelConfig.messageId).catch(() => null);
   }
 
-  const message = await channel.send(buildRulesPanelPayload());
-  rulesPanelConfig.messageId = message.id;
+  if (!panel) {
+    panel = await findExistingRulesPanel(channel);
+    if (panel && !rulesPanelConfigLoadedFromFile) {
+      hydrateRulesConfigFromMessage(panel);
+    }
+  }
+
+  const payload = buildRulesPanelPayload();
+  if (panel) {
+    await panel.edit(payload);
+  } else {
+    panel = await channel.send(payload);
+  }
+
+  rulesPanelConfig.messageId = panel.id;
   saveRulesPanelConfig();
+  await cleanupDuplicateRulesPanels(channel, panel.id);
   return true;
 }
 
@@ -316,7 +415,7 @@ function startRulesAutoRefresh() {
     if (!guild) return;
     try {
       await refreshRulesPanel(guild);
-      console.log('[Rules] Mensagem de regras renovada.');
+      console.log('[Rules] Painel de regras sincronizado sem resetar a configuração.');
     } catch (e) {
       console.warn('[Rules] Erro ao renovar painel:', e.message);
     }
@@ -445,6 +544,8 @@ async function handleRulesModal(interaction) {
 const RULES2_CHANNEL_ID = '1553953899180728372';
 const RULES2_CONFIG_FILE = path.join(__dirname, 'rules-panel-config-2.json');
 
+let rules2ConfigLoadedFromFile = false;
+
 let rules2Config = {
   title: '📜 Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
@@ -459,6 +560,7 @@ let rules2Config = {
 try {
   if (fs.existsSync(RULES2_CONFIG_FILE)) {
     rules2Config = { ...rules2Config, ...JSON.parse(fs.readFileSync(RULES2_CONFIG_FILE, 'utf8')) };
+    rules2ConfigLoadedFromFile = true;
   }
 } catch (e) {
   console.warn('[Rules2] Erro ao carregar configuração:', e.message);
@@ -470,9 +572,14 @@ function saveRules2Config() {
 }
 
 function buildRules2Payload() {
+  const descriptionParts = [
+    String(rules2Config.description || '').trim(),
+    String(rules2Config.rulesText || '').trim()
+  ].filter(Boolean);
+
   const embed = createEmbed({
     title: rules2Config.title || '📜 Regras do Servidor',
-    description: `${rules2Config.description || ''}\n\n${rules2Config.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
+    description: (descriptionParts.join('\\n\\n') || 'Nenhuma regra configurada.').slice(0, 4096),
     color: rules2Config.color || '#5865F2',
     footer: rules2Config.footer || undefined
   });
@@ -487,6 +594,79 @@ function buildRules2Payload() {
   };
 }
 
+function isRules2PanelMessage(message) {
+  if (!message?.author || message.author.id !== client.user?.id) return false;
+  const hasEmbed = Boolean(message.embeds?.length);
+  const hasRulesButton = message.components?.some(row =>
+    row.components?.some(component => component.customId === 'rules2_admin_edit')
+  );
+  return hasEmbed && hasRulesButton;
+}
+
+function isLikelyCustomizedRules2Message(message) {
+  if (!isRules2PanelMessage(message)) return false;
+  const embed = message.embeds?.[0];
+  if (!embed) return false;
+  const defaultTitle = '📜 Regras do Servidor';
+  const defaultDescription = 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.\\n\\n1️⃣ Respeite todos os membros.\\n\\n2️⃣ Não faça spam ou flood.\\n\\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\\n\\n4️⃣ Use cada canal para sua finalidade.\\n\\n5️⃣ Siga as regras do Discord e as orientações da equipe.';
+  const defaultFooter = 'Leia com atenção antes de participar.';
+  return Boolean(
+    String(embed.title || '') !== defaultTitle ||
+    String(embed.description || '') !== defaultDescription ||
+    String(embed.footer?.text || '') !== defaultFooter ||
+    embed.image?.url ||
+    embed.thumbnail?.url
+  );
+}
+
+function hydrateRules2ConfigFromMessage(message) {
+  const embed = message?.embeds?.[0];
+  if (!embed) return false;
+
+  const combinedDescription = String(embed.description || '').trim();
+  rules2Config.title = String(embed.title || '📜 Regras do Servidor');
+  rules2Config.description = '';
+  rules2Config.rulesText = combinedDescription || 'Nenhuma regra configurada.';
+  rules2Config.color = embed.hexColor || rules2Config.color || '#5865F2';
+  rules2Config.footer = String(embed.footer?.text || '');
+  rules2Config.banner = String(embed.image?.url || '');
+  rules2Config.icon = String(embed.thumbnail?.url || '');
+  rules2Config.messageId = message.id;
+  rules2ConfigLoadedFromFile = true;
+  saveRules2Config();
+  console.log(`[Rules2] Configuração recuperada do painel existente ${message.id}.`);
+  return true;
+}
+
+async function findExistingRules2Panel(channel) {
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages?.size) return null;
+
+  const panels = [...messages.values()].filter(isRules2PanelMessage);
+  if (!panels.length) return null;
+
+  if (!rules2ConfigLoadedFromFile) {
+    const customized = panels.filter(isLikelyCustomizedRules2Message)
+      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+    if (customized.length) return customized[0];
+  }
+
+  return panels.sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
+}
+
+async function cleanupDuplicateRules2Panels(channel, keepMessageId) {
+  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
+  if (!messages?.size) return;
+
+  const duplicates = [...messages.values()].filter(message =>
+    isRules2PanelMessage(message) && message.id !== keepMessageId
+  );
+
+  for (const message of duplicates) {
+    await message.delete().catch(() => {});
+  }
+}
+
 async function refreshRules2Panel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES2_CHANNEL_ID).catch(() => null);
@@ -495,16 +675,28 @@ async function refreshRules2Panel(guild) {
   const permissions = me ? channel.permissionsFor(me) : null;
   if (permissions && !permissions.has([
     PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages,
-    PermissionFlagsBits.EmbedLinks
+    PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks
   ])) throw Object.assign(new Error('Permissões insuficientes no canal de regras 2.'), {code:50013});
+
+  let panel = null;
   if (rules2Config.messageId) {
-    const old = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
-    if (old) await old.delete().catch(() => {});
+    panel = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
   }
-  const msg = await channel.send(buildRules2Payload());
-  rules2Config.messageId = msg.id;
+
+  if (!panel) {
+    panel = await findExistingRules2Panel(channel);
+    if (panel && !rules2ConfigLoadedFromFile) {
+      hydrateRules2ConfigFromMessage(panel);
+    }
+  }
+
+  const payload = buildRules2Payload();
+  if (panel) await panel.edit(payload);
+  else panel = await channel.send(payload);
+
+  rules2Config.messageId = panel.id;
   saveRules2Config();
+  await cleanupDuplicateRules2Panels(channel, panel.id);
   return true;
 }
 
@@ -514,7 +706,7 @@ async function startRules2AutoRefresh() {
     if (!guild) return;
     try {
       await refreshRules2Panel(guild);
-      console.log('[Rules2] Mensagem de regras renovada.');
+      console.log('[Rules2] Painel de regras sincronizado sem resetar a configuração.');
     } catch (e) {
       console.warn('[Rules2] Erro ao renovar painel:', e.message);
     }
@@ -12888,11 +13080,24 @@ client.on(
 
         content ===
 
+          '!regras'
+
+      ) {
+        await message.delete().catch(() => {});
+        await refreshRulesPanel(message.guild);
+        return;
+      }
+
+
+      if (
+
+        content ===
+
           '!regras2'
 
       ) {
+        await message.delete().catch(() => {});
         await refreshRules2Panel(message.guild);
-        await message.reply('✅ Painel de regras 2 publicado/atualizado neste canal.');
         return;
       }
 
