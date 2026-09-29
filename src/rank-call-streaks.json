@@ -1,0 +1,113 @@
+{
+  "1549489994530557992:960649183847657523": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 66444
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1530986397367009501": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 66988
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1451381084678787153": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 38336
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1543465749597655050": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 41005
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1499961991215845466": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 39040
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1465398060275208254": {
+    "dates": [],
+    "dailySeconds": {
+      "2026-09-28": 141
+    },
+    "currentStreak": 0,
+    "bestStreak": 0,
+    "lastActiveDate": "",
+    "lastQualifiedDate": "",
+    "missedDayNotified": ""
+  },
+  "1549489994530557992:1303946629103095899": {
+    "dates": [
+      "2026-09-28"
+    ],
+    "dailySeconds": {
+      "2026-09-28": 5672
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-28",
+    "lastQualifiedDate": "2026-09-28",
+    "missedDayNotified": "2026-09-27"
+  },
+  "1549489994530557992:1481589321671770236": {
+    "dates": [],
+    "dailySeconds": {
+      "2026-09-28": 1642
+    },
+    "currentStreak": 0,
+    "bestStreak": 0,
+    "lastActiveDate": "",
+    "lastQualifiedDate": "",
+    "missedDayNotified": ""
+  },
+  "1549489994530557992:1522808255884296384": {
+    "dates": [],
+    "dailySeconds": {
+      "2026-09-28": 1199
+    },
+    "currentStreak": 0,
+    "bestStreak": 0,
+    "lastActiveDate": "",
+    "lastQualifiedDate": "",
+    "missedDayNotified": ""
+  }
+}
