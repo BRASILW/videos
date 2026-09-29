@@ -1721,57 +1721,61 @@ async function purgeBotMessagesFromUserDM(userId) {
       `[RankCall DM] PV de ${user.tag}: ${scanned} mensagem(ns) lida(s), ${deleted} apagada(s), ${failed} falha(s).`
     );
 
-    return deleted;
+    return { deleted, failed };
   } catch (error) {
     console.warn(
       `[RankCall DM] Não foi possível acessar/limpar o PV de ${userId}:`,
       error?.message || error
     );
-    return 0;
+    return { deleted: 0, failed: 1 };
   }
 }
 
 async function cleanupRankCallDMsOnStartup() {
-  if (rankCallDmCleanupRunning || rankCallStreaks.size === 0 || !client.user) return;
+  if (rankCallDmCleanupRunning || !client.user) return;
   rankCallDmCleanupRunning = true;
 
   try {
     const userIds = new Set();
-    for (const key of rankCallStreaks.keys()) {
-      const [, userId] = key.split(':');
-      if (userId) userIds.add(userId);
+
+    // Inclui todos os membros das guilds que o bot consegue enxergar,
+    // além dos usuários que já possuem dados do RankCall localmente.
+    for (const guild of client.guilds.cache.values()) {
+      for (const member of guild.members.cache.values()) {
+        if (!member.user?.bot && member.id !== client.user.id) {
+          userIds.add(member.id);
+        }
+      }
     }
 
-    if (userIds.size === 0) return;
+    for (const key of rankCallStreaks.keys()) {
+      const [, userId] = key.split(':');
+      if (userId && userId !== client.user.id) userIds.add(userId);
+    }
+
+    if (userIds.size === 0) {
+      console.log('[RankCall DM] Nenhum usuário elegível para limpeza de PV.');
+      return;
+    }
 
     console.log(`[RankCall DM] Limpando mensagens antigas do bot em ${userIds.size} PV(s)...`);
 
+    let totalDeleted = 0;
+    let totalFailed = 0;
+
     for (const userId of userIds) {
-      await purgeBotMessagesFromUserDM(userId);
+      const result = await purgeBotMessagesFromUserDM(userId);
+      totalDeleted += Number(result?.deleted || 0);
+      totalFailed += Number(result?.failed || 0);
     }
 
-    console.log('[RankCall DM] Limpeza concluída.');
+    console.log(
+      `[RankCall DM] Limpeza concluída. ${totalDeleted} mensagem(ns) apagada(s), ${totalFailed} falha(s).`
+    );
   } finally {
     rankCallDmCleanupRunning = false;
   }
 }
-
-async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak) {
-  if (oldStreak <= 0) return;
-  try {
-    const user = await client.users.fetch(userId);
-    // Antes de enviar uma nova notificação, remove mensagens antigas do bot
-    // nesse PV para impedir o acúmulo causado pelo flood anterior.
-    await purgeBotMessagesFromUserDM(userId);
-
-    const guild = client.guilds.cache.get(guildId);
-    const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
-    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequência do RankCall foi perdida.**\n\nVocê tinha uma sequência de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequência.`);
-  } catch (error) {
-    console.warn('[RankCall] Não foi possível enviar DM de sequência:', error.message);
-  }
-}
-
 let rankCallStreakEvaluationRunning = false;
 
 async function evaluateRankCallStreaks(now = Date.now()) {
@@ -1798,11 +1802,10 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     // Se ontem não foi cumprido, a sequência atual é quebrada.
     // Isso não impede que uma nova sequência seja iniciada hoje após 30 min.
     if (Number(record.currentStreak) > 0 && !yesterdayQualified && record.missedDayNotified !== yesterday) {
-      const oldStreak = Number(record.currentStreak) || 0;
+      // A sequência é quebrada normalmente, mas nenhuma DM de perda é enviada.
       record.currentStreak = 0;
       record.missedDayNotified = yesterday;
       changed = true;
-      await notifyRankCallStreakBroken(guildId, userId, yesterday, oldStreak);
     }
 
     // Ao atingir 30 min hoje, a data de hoje precisa estar qualificada.
