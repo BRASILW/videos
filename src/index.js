@@ -1682,7 +1682,9 @@ async function purgeBotMessagesFromUserDM(userId) {
     const user = await client.users.fetch(userId);
     const dm = await user.createDM();
     let before;
+    let scanned = 0;
     let deleted = 0;
+    let failed = 0;
 
     while (true) {
       const options = { limit: 100 };
@@ -1690,15 +1692,23 @@ async function purgeBotMessagesFromUserDM(userId) {
 
       const messages = await dm.messages.fetch(options);
       if (!messages.size) break;
+      scanned += messages.size;
 
       for (const message of messages.values()) {
         if (message.author?.id !== client.user.id) continue;
 
         try {
-          await message.delete();
+          // Use o gerenciador de mensagens do próprio PV para apagar
+          // diretamente pelo ID. Isso funciona mesmo sem depender do
+          // estado de cache do objeto Message.
+          await dm.messages.delete(message.id);
           deleted += 1;
         } catch (error) {
-          // A mensagem pode já ter sido apagada ou estar indisponível.
+          failed += 1;
+          console.warn(
+            `[RankCall DM] Falha ao apagar mensagem ${message.id} no PV de ${user.tag}:`,
+            error?.message || error
+          );
         }
       }
 
@@ -1707,13 +1717,16 @@ async function purgeBotMessagesFromUserDM(userId) {
       before = lastMessage.id;
     }
 
-    if (deleted > 0) {
-      console.log(`[RankCall DM] ${deleted} mensagem(ns) do bot apagada(s) no PV de ${user.tag}.`);
-    }
+    console.log(
+      `[RankCall DM] PV de ${user.tag}: ${scanned} mensagem(ns) lida(s), ${deleted} apagada(s), ${failed} falha(s).`
+    );
 
     return deleted;
   } catch (error) {
-    console.warn(`[RankCall DM] Não foi possível limpar o PV de ${userId}:`, error.message);
+    console.warn(
+      `[RankCall DM] Não foi possível acessar/limpar o PV de ${userId}:`,
+      error?.message || error
+    );
     return 0;
   }
 }
