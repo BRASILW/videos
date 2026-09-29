@@ -1635,7 +1635,9 @@ function addRankCallQualifiedDate(record, dateKey) {
   record.bestStreak = Math.max(Number(record.bestStreak) || 0, record.currentStreak);
   record.lastActiveDate = dateKey;
   record.lastQualifiedDate = dateKey;
-  record.missedDayNotified = '';
+  // Não limpe missedDayNotified aqui.
+  // Se a pessoa perdeu ontem e completou 30 min hoje, ela começa uma nova
+  // sequência, mas não deve receber novamente a mesma notificação de perda.
   return true;
 }
 
@@ -1671,10 +1673,84 @@ function addRankCallDailySecondsForInterval(guildId, userId, startMs, endMs) {
   return changed;
 }
 
+let rankCallDmCleanupRunning = false;
+
+async function purgeBotMessagesFromUserDM(userId) {
+  if (!client.user || !userId) return 0;
+
+  try {
+    const user = await client.users.fetch(userId);
+    const dm = await user.createDM();
+    let before;
+    let deleted = 0;
+
+    while (true) {
+      const options = { limit: 100 };
+      if (before) options.before = before;
+
+      const messages = await dm.messages.fetch(options);
+      if (!messages.size) break;
+
+      for (const message of messages.values()) {
+        if (message.author?.id !== client.user.id) continue;
+
+        try {
+          await message.delete();
+          deleted += 1;
+        } catch (error) {
+          // A mensagem pode já ter sido apagada ou estar indisponível.
+        }
+      }
+
+      const lastMessage = messages.last();
+      if (!lastMessage || messages.size < 100) break;
+      before = lastMessage.id;
+    }
+
+    if (deleted > 0) {
+      console.log(`[RankCall DM] ${deleted} mensagem(ns) do bot apagada(s) no PV de ${user.tag}.`);
+    }
+
+    return deleted;
+  } catch (error) {
+    console.warn(`[RankCall DM] Não foi possível limpar o PV de ${userId}:`, error.message);
+    return 0;
+  }
+}
+
+async function cleanupRankCallDMsOnStartup() {
+  if (rankCallDmCleanupRunning || rankCallStreaks.size === 0 || !client.user) return;
+  rankCallDmCleanupRunning = true;
+
+  try {
+    const userIds = new Set();
+    for (const key of rankCallStreaks.keys()) {
+      const [, userId] = key.split(':');
+      if (userId) userIds.add(userId);
+    }
+
+    if (userIds.size === 0) return;
+
+    console.log(`[RankCall DM] Limpando mensagens antigas do bot em ${userIds.size} PV(s)...`);
+
+    for (const userId of userIds) {
+      await purgeBotMessagesFromUserDM(userId);
+    }
+
+    console.log('[RankCall DM] Limpeza concluída.');
+  } finally {
+    rankCallDmCleanupRunning = false;
+  }
+}
+
 async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak) {
   if (oldStreak <= 0) return;
   try {
     const user = await client.users.fetch(userId);
+    // Antes de enviar uma nova notificação, remove mensagens antigas do bot
+    // nesse PV para impedir o acúmulo causado pelo flood anterior.
+    await purgeBotMessagesFromUserDM(userId);
+
     const guild = client.guilds.cache.get(guildId);
     const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
     await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequência do RankCall foi perdida.**\n\nVocê tinha uma sequência de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequência.`);
@@ -1683,7 +1759,15 @@ async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak
   }
 }
 
+let rankCallStreakEvaluationRunning = false;
+
 async function evaluateRankCallStreaks(now = Date.now()) {
+  // Vários pontos do bot podem disparar esta avaliação quase ao mesmo tempo.
+  // Evite execuções concorrentes, que poderiam enviar a mesma DM mais de uma vez.
+  if (rankCallStreakEvaluationRunning) return false;
+  rankCallStreakEvaluationRunning = true;
+
+  try {
   const today = getRankCallDateKey(now);
   const yesterday = shiftRankCallDate(today, -1);
   let changed = false;
@@ -1730,6 +1814,9 @@ async function evaluateRankCallStreaks(now = Date.now()) {
 
   if (changed) saveRankCallStreaks();
   return changed;
+  } finally {
+    rankCallStreakEvaluationRunning = false;
+  }
 }
 
 function getRankCallStreak(guildId, userId) { return rankCallStreaks.get(`${guildId}:${userId}`) || null; }
@@ -11720,6 +11807,7 @@ client.once(
     initializeRankCallVoiceSessions();
     syncRankCallVoiceSessionsFromVoiceStates();
     checkpointLocalVoiceSessions();
+    void cleanupRankCallDMsOnStartup();
     startRankCallBackupScheduler();
     startRankCallAutoRefresh();
     if (rankCallConfig.messageId) await refreshRankCallPanel();
