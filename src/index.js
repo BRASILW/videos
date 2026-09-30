@@ -1,4 +1,4 @@
-�require('dotenv').config();
+require('dotenv').config();
 
 // Mant�m o processo vivo em rejei��es ass�ncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
