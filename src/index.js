@@ -4056,13 +4056,13 @@ async function publishRankCallPanel(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`rankcall_prev_${hoursView.safePage}`)
-          .setLabel('? Horas')
-          .setStyle(ButtonStyle.Secondary)
+          .setLabel('Anterior')
+          .setStyle(ButtonStyle.Primary)
           .setDisabled(hoursView.safePage <= 0),
         new ButtonBuilder()
           .setCustomId(`rankcall_next_${hoursView.safePage}`)
-          .setLabel('Horas ?')
-          .setStyle(ButtonStyle.Secondary)
+          .setLabel('Próximo')
+          .setStyle(ButtonStyle.Primary)
           .setDisabled(
             hoursView.safePage >= hoursView.totalPages - 1
           )
@@ -4075,13 +4075,13 @@ async function publishRankCallPanel(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`rankstreak_prev_${streakView.safePage}`)
-          .setLabel('? Sequ�ncias')
-          .setStyle(ButtonStyle.Success)
+          .setLabel('Anterior')
+          .setStyle(ButtonStyle.Primary)
           .setDisabled(streakView.safePage <= 0),
         new ButtonBuilder()
           .setCustomId(`rankstreak_next_${streakView.safePage}`)
-          .setLabel('Sequ�ncias ?')
-          .setStyle(ButtonStyle.Success)
+          .setLabel('Próximo')
+          .setStyle(ButtonStyle.Primary)
           .setDisabled(
             streakView.safePage >= streakView.totalPages - 1
           )
