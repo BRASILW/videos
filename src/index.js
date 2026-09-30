@@ -208,8 +208,6 @@ const RULES_CHANNEL_ID =
 const RULES_CONFIG_FILE =
   path.join(__dirname, 'rules-panel-config.json');
 
-let rulesPanelConfigLoadedFromFile = false;
-
 let rulesPanelConfig = {
   title: '📜 Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
@@ -227,7 +225,6 @@ try {
       ...rulesPanelConfig,
       ...JSON.parse(fs.readFileSync(RULES_CONFIG_FILE, 'utf8'))
     };
-    rulesPanelConfigLoadedFromFile = true;
   }
 } catch (e) {
   console.warn('[Rules] Erro ao carregar configuração:', e.message);
@@ -249,14 +246,9 @@ function isRulesPanelAdmin(member) {
 }
 
 function buildRulesPanelPayload() {
-  const descriptionParts = [
-    String(rulesPanelConfig.description || '').trim(),
-    String(rulesPanelConfig.rulesText || '').trim()
-  ].filter(Boolean);
-
   const embed = createEmbed({
     title: rulesPanelConfig.title || '📜 Regras do Servidor',
-    description: (descriptionParts.join('\\n\\n') || 'Nenhuma regra configurada.').slice(0, 4096),
+    description: `${rulesPanelConfig.description || ''}\n\n${rulesPanelConfig.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rulesPanelConfig.color || '#5865F2',
     footer: rulesPanelConfig.footer || undefined
   });
@@ -283,79 +275,6 @@ function buildRulesPanelPayload() {
   };
 }
 
-function isRulesPanelMessage(message) {
-  if (!message?.author || message.author.id !== client.user?.id) return false;
-  const hasEmbed = Boolean(message.embeds?.length);
-  const hasRulesButton = message.components?.some(row =>
-    row.components?.some(component => component.customId === 'rules_admin_edit')
-  );
-  return hasEmbed && hasRulesButton;
-}
-
-function isLikelyCustomizedRulesMessage(message) {
-  if (!isRulesPanelMessage(message)) return false;
-  const embed = message.embeds?.[0];
-  if (!embed) return false;
-  const defaultTitle = '📜 Regras do Servidor';
-  const defaultDescription = 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.\\n\\n1️⃣ Respeite todos os membros.\\n\\n2️⃣ Não faça spam ou flood.\\n\\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\\n\\n4️⃣ Use cada canal para sua finalidade.\\n\\n5️⃣ Siga as regras do Discord e as orientações da equipe.';
-  const defaultFooter = 'Leia com atenção antes de participar.';
-  return Boolean(
-    String(embed.title || '') !== defaultTitle ||
-    String(embed.description || '') !== defaultDescription ||
-    String(embed.footer?.text || '') !== defaultFooter ||
-    embed.image?.url ||
-    embed.thumbnail?.url
-  );
-}
-
-function hydrateRulesConfigFromMessage(message) {
-  const embed = message?.embeds?.[0];
-  if (!embed) return false;
-
-  const combinedDescription = String(embed.description || '').trim();
-  rulesPanelConfig.title = String(embed.title || '📜 Regras do Servidor');
-  rulesPanelConfig.description = '';
-  rulesPanelConfig.rulesText = combinedDescription || 'Nenhuma regra configurada.';
-  rulesPanelConfig.color = embed.hexColor || rulesPanelConfig.color || '#5865F2';
-  rulesPanelConfig.footer = String(embed.footer?.text || '');
-  rulesPanelConfig.banner = String(embed.image?.url || '');
-  rulesPanelConfig.icon = String(embed.thumbnail?.url || '');
-  rulesPanelConfig.messageId = message.id;
-  rulesPanelConfigLoadedFromFile = true;
-  saveRulesPanelConfig();
-  console.log(`[Rules] Configuração recuperada do painel existente ${message.id}.`);
-  return true;
-}
-
-async function findExistingRulesPanel(channel) {
-  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!messages?.size) return null;
-
-  const panels = [...messages.values()].filter(isRulesPanelMessage);
-  if (!panels.length) return null;
-
-  if (!rulesPanelConfigLoadedFromFile) {
-    const customized = panels.filter(isLikelyCustomizedRulesMessage)
-      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
-    if (customized.length) return customized[0];
-  }
-
-  return panels.sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
-}
-
-async function cleanupDuplicateRulesPanels(channel, keepMessageId) {
-  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!messages?.size) return;
-
-  const duplicates = [...messages.values()].filter(message =>
-    isRulesPanelMessage(message) && message.id !== keepMessageId
-  );
-
-  for (const message of duplicates) {
-    await message.delete().catch(() => {});
-  }
-}
-
 async function refreshRulesPanel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES_CHANNEL_ID).catch(() => null);
@@ -366,43 +285,25 @@ async function refreshRulesPanel(guild) {
 
   const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
   const permissions = me ? channel.permissionsFor(me) : null;
-  if (permissions && !permissions.has([
-    PermissionFlagsBits.ViewChannel,
-    PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ReadMessageHistory,
-    PermissionFlagsBits.EmbedLinks
-  ])) {
+  if (permissions && !permissions.has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.EmbedLinks])) {
     const missing = [
       [PermissionFlagsBits.ViewChannel, 'Ver canal'],
       [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
       [PermissionFlagsBits.ReadMessageHistory, 'Ver histórico de mensagens'],
+      [PermissionFlagsBits.ManageMessages, 'Gerenciar mensagens'],
       [PermissionFlagsBits.EmbedLinks, 'Incorporar links']
     ].filter(([flag]) => !permissions.has(flag)).map(([, name]) => name);
     throw Object.assign(new Error(`Permissões ausentes: ${missing.join(', ')}`), { code: 50013, missing });
   }
 
-  let panel = null;
   if (rulesPanelConfig.messageId) {
-    panel = await channel.messages.fetch(rulesPanelConfig.messageId).catch(() => null);
+    const old = await channel.messages.fetch(rulesPanelConfig.messageId).catch(() => null);
+    if (old) await old.delete();
   }
 
-  if (!panel) {
-    panel = await findExistingRulesPanel(channel);
-    if (panel && !rulesPanelConfigLoadedFromFile) {
-      hydrateRulesConfigFromMessage(panel);
-    }
-  }
-
-  const payload = buildRulesPanelPayload();
-  if (panel) {
-    await panel.edit(payload);
-  } else {
-    panel = await channel.send(payload);
-  }
-
-  rulesPanelConfig.messageId = panel.id;
+  const message = await channel.send(buildRulesPanelPayload());
+  rulesPanelConfig.messageId = message.id;
   saveRulesPanelConfig();
-  await cleanupDuplicateRulesPanels(channel, panel.id);
   return true;
 }
 
@@ -415,7 +316,7 @@ function startRulesAutoRefresh() {
     if (!guild) return;
     try {
       await refreshRulesPanel(guild);
-      console.log('[Rules] Painel de regras sincronizado sem resetar a configuração.');
+      console.log('[Rules] Mensagem de regras renovada.');
     } catch (e) {
       console.warn('[Rules] Erro ao renovar painel:', e.message);
     }
@@ -544,8 +445,6 @@ async function handleRulesModal(interaction) {
 const RULES2_CHANNEL_ID = '1553953899180728372';
 const RULES2_CONFIG_FILE = path.join(__dirname, 'rules-panel-config-2.json');
 
-let rules2ConfigLoadedFromFile = false;
-
 let rules2Config = {
   title: '📜 Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
@@ -560,7 +459,6 @@ let rules2Config = {
 try {
   if (fs.existsSync(RULES2_CONFIG_FILE)) {
     rules2Config = { ...rules2Config, ...JSON.parse(fs.readFileSync(RULES2_CONFIG_FILE, 'utf8')) };
-    rules2ConfigLoadedFromFile = true;
   }
 } catch (e) {
   console.warn('[Rules2] Erro ao carregar configuração:', e.message);
@@ -572,14 +470,9 @@ function saveRules2Config() {
 }
 
 function buildRules2Payload() {
-  const descriptionParts = [
-    String(rules2Config.description || '').trim(),
-    String(rules2Config.rulesText || '').trim()
-  ].filter(Boolean);
-
   const embed = createEmbed({
     title: rules2Config.title || '📜 Regras do Servidor',
-    description: (descriptionParts.join('\\n\\n') || 'Nenhuma regra configurada.').slice(0, 4096),
+    description: `${rules2Config.description || ''}\n\n${rules2Config.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rules2Config.color || '#5865F2',
     footer: rules2Config.footer || undefined
   });
@@ -594,79 +487,6 @@ function buildRules2Payload() {
   };
 }
 
-function isRules2PanelMessage(message) {
-  if (!message?.author || message.author.id !== client.user?.id) return false;
-  const hasEmbed = Boolean(message.embeds?.length);
-  const hasRulesButton = message.components?.some(row =>
-    row.components?.some(component => component.customId === 'rules2_admin_edit')
-  );
-  return hasEmbed && hasRulesButton;
-}
-
-function isLikelyCustomizedRules2Message(message) {
-  if (!isRules2PanelMessage(message)) return false;
-  const embed = message.embeds?.[0];
-  if (!embed) return false;
-  const defaultTitle = '📜 Regras do Servidor';
-  const defaultDescription = 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.\\n\\n1️⃣ Respeite todos os membros.\\n\\n2️⃣ Não faça spam ou flood.\\n\\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\\n\\n4️⃣ Use cada canal para sua finalidade.\\n\\n5️⃣ Siga as regras do Discord e as orientações da equipe.';
-  const defaultFooter = 'Leia com atenção antes de participar.';
-  return Boolean(
-    String(embed.title || '') !== defaultTitle ||
-    String(embed.description || '') !== defaultDescription ||
-    String(embed.footer?.text || '') !== defaultFooter ||
-    embed.image?.url ||
-    embed.thumbnail?.url
-  );
-}
-
-function hydrateRules2ConfigFromMessage(message) {
-  const embed = message?.embeds?.[0];
-  if (!embed) return false;
-
-  const combinedDescription = String(embed.description || '').trim();
-  rules2Config.title = String(embed.title || '📜 Regras do Servidor');
-  rules2Config.description = '';
-  rules2Config.rulesText = combinedDescription || 'Nenhuma regra configurada.';
-  rules2Config.color = embed.hexColor || rules2Config.color || '#5865F2';
-  rules2Config.footer = String(embed.footer?.text || '');
-  rules2Config.banner = String(embed.image?.url || '');
-  rules2Config.icon = String(embed.thumbnail?.url || '');
-  rules2Config.messageId = message.id;
-  rules2ConfigLoadedFromFile = true;
-  saveRules2Config();
-  console.log(`[Rules2] Configuração recuperada do painel existente ${message.id}.`);
-  return true;
-}
-
-async function findExistingRules2Panel(channel) {
-  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!messages?.size) return null;
-
-  const panels = [...messages.values()].filter(isRules2PanelMessage);
-  if (!panels.length) return null;
-
-  if (!rules2ConfigLoadedFromFile) {
-    const customized = panels.filter(isLikelyCustomizedRules2Message)
-      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
-    if (customized.length) return customized[0];
-  }
-
-  return panels.sort((a, b) => b.createdTimestamp - a.createdTimestamp)[0];
-}
-
-async function cleanupDuplicateRules2Panels(channel, keepMessageId) {
-  const messages = await channel.messages.fetch({ limit: 100 }).catch(() => null);
-  if (!messages?.size) return;
-
-  const duplicates = [...messages.values()].filter(message =>
-    isRules2PanelMessage(message) && message.id !== keepMessageId
-  );
-
-  for (const message of duplicates) {
-    await message.delete().catch(() => {});
-  }
-}
-
 async function refreshRules2Panel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES2_CHANNEL_ID).catch(() => null);
@@ -675,28 +495,16 @@ async function refreshRules2Panel(guild) {
   const permissions = me ? channel.permissionsFor(me) : null;
   if (permissions && !permissions.has([
     PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages,
-    PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks
+    PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages,
+    PermissionFlagsBits.EmbedLinks
   ])) throw Object.assign(new Error('Permissões insuficientes no canal de regras 2.'), {code:50013});
-
-  let panel = null;
   if (rules2Config.messageId) {
-    panel = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
+    const old = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
+    if (old) await old.delete().catch(() => {});
   }
-
-  if (!panel) {
-    panel = await findExistingRules2Panel(channel);
-    if (panel && !rules2ConfigLoadedFromFile) {
-      hydrateRules2ConfigFromMessage(panel);
-    }
-  }
-
-  const payload = buildRules2Payload();
-  if (panel) await panel.edit(payload);
-  else panel = await channel.send(payload);
-
-  rules2Config.messageId = panel.id;
+  const msg = await channel.send(buildRules2Payload());
+  rules2Config.messageId = msg.id;
   saveRules2Config();
-  await cleanupDuplicateRules2Panels(channel, panel.id);
   return true;
 }
 
@@ -706,7 +514,7 @@ async function startRules2AutoRefresh() {
     if (!guild) return;
     try {
       await refreshRules2Panel(guild);
-      console.log('[Rules2] Painel de regras sincronizado sem resetar a configuração.');
+      console.log('[Rules2] Mensagem de regras renovada.');
     } catch (e) {
       console.warn('[Rules2] Erro ao renovar painel:', e.message);
     }
@@ -1238,11 +1046,6 @@ const RANK_CALL_CHANNEL_ID =
 
   '1553979838698885200';
 
-// Painel oficial do RankCall: o bot deve editar SOMENTE esta mensagem.
-const RANK_CALL_MESSAGE_ID =
-
-  '1554173002885763156';
-
 
 
 const RANK_CALL_CONFIG_FILE =
@@ -1332,7 +1135,7 @@ const afkUsers = new Map();
 
 const DEFAULT_RANK_CALL_CONFIG = {
   channelId: RANK_CALL_CHANNEL_ID,
-  messageId: RANK_CALL_MESSAGE_ID,
+  messageId: null,
   page: 0,
   title: '🏆 Ranking de Horas em Call',
   description: 'Acompanhe em tempo real quem mais permanece em call.',
@@ -1342,7 +1145,7 @@ const DEFAULT_RANK_CALL_CONFIG = {
   streakPage: 0
 };
 
-let rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, messageId: RANK_CALL_MESSAGE_ID };
+let rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG };
 
 const rankCallStreaks = new Map();
 let rankCallBackupTimer = null;
@@ -1356,8 +1159,6 @@ function loadRankCallConfig() {
     rankCallConfig = {
       ...DEFAULT_RANK_CALL_CONFIG,
       ...data,
-      // Nunca aceitar outro messageId vindo do JSON/config local.
-      messageId: RANK_CALL_MESSAGE_ID,
       color: normalizeHexColor(data?.color || DEFAULT_RANK_CALL_CONFIG.color)
     };
   } catch (e) {
@@ -1834,9 +1635,7 @@ function addRankCallQualifiedDate(record, dateKey) {
   record.bestStreak = Math.max(Number(record.bestStreak) || 0, record.currentStreak);
   record.lastActiveDate = dateKey;
   record.lastQualifiedDate = dateKey;
-  // Não limpe missedDayNotified aqui.
-  // Se a pessoa perdeu ontem e completou 30 min hoje, ela começa uma nova
-  // sequência, mas não deve receber novamente a mesma notificação de perda.
+  record.missedDayNotified = '';
   return true;
 }
 
@@ -1872,118 +1671,19 @@ function addRankCallDailySecondsForInterval(guildId, userId, startMs, endMs) {
   return changed;
 }
 
-let rankCallDmCleanupRunning = false;
-
-async function purgeBotMessagesFromUserDM(userId) {
-  if (!client.user || !userId) return 0;
-
+async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak) {
+  if (oldStreak <= 0) return;
   try {
     const user = await client.users.fetch(userId);
-    const dm = await user.createDM();
-    let before;
-    let scanned = 0;
-    let deleted = 0;
-    let failed = 0;
-
-    while (true) {
-      const options = { limit: 100 };
-      if (before) options.before = before;
-
-      const messages = await dm.messages.fetch(options);
-      if (!messages.size) break;
-      scanned += messages.size;
-
-      for (const message of messages.values()) {
-        if (message.author?.id !== client.user.id) continue;
-
-        try {
-          // Use o gerenciador de mensagens do próprio PV para apagar
-          // diretamente pelo ID. Isso funciona mesmo sem depender do
-          // estado de cache do objeto Message.
-          await dm.messages.delete(message.id);
-          deleted += 1;
-        } catch (error) {
-          failed += 1;
-          console.warn(
-            `[RankCall DM] Falha ao apagar mensagem ${message.id} no PV de ${user.tag}:`,
-            error?.message || error
-          );
-        }
-      }
-
-      const lastMessage = messages.last();
-      if (!lastMessage || messages.size < 100) break;
-      before = lastMessage.id;
-    }
-
-    console.log(
-      `[RankCall DM] PV de ${user.tag}: ${scanned} mensagem(ns) lida(s), ${deleted} apagada(s), ${failed} falha(s).`
-    );
-
-    return { deleted, failed };
+    const guild = client.guilds.cache.get(guildId);
+    const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
+    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequência do RankCall foi perdida.**\n\nVocê tinha uma sequência de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequência.`);
   } catch (error) {
-    console.warn(
-      `[RankCall DM] Não foi possível acessar/limpar o PV de ${userId}:`,
-      error?.message || error
-    );
-    return { deleted: 0, failed: 1 };
+    console.warn('[RankCall] Não foi possível enviar DM de sequência:', error.message);
   }
 }
-
-async function cleanupRankCallDMsOnStartup() {
-  if (rankCallDmCleanupRunning || !client.user) return;
-  rankCallDmCleanupRunning = true;
-
-  try {
-    const userIds = new Set();
-
-    // Inclui todos os membros das guilds que o bot consegue enxergar,
-    // além dos usuários que já possuem dados do RankCall localmente.
-    for (const guild of client.guilds.cache.values()) {
-      for (const member of guild.members.cache.values()) {
-        if (!member.user?.bot && member.id !== client.user.id) {
-          userIds.add(member.id);
-        }
-      }
-    }
-
-    for (const key of rankCallStreaks.keys()) {
-      const [, userId] = key.split(':');
-      if (userId && userId !== client.user.id) userIds.add(userId);
-    }
-
-    if (userIds.size === 0) {
-      console.log('[RankCall DM] Nenhum usuário elegível para limpeza de PV.');
-      return;
-    }
-
-    console.log(`[RankCall DM] Limpando mensagens antigas do bot em ${userIds.size} PV(s)...`);
-
-    let totalDeleted = 0;
-    let totalFailed = 0;
-
-    for (const userId of userIds) {
-      const result = await purgeBotMessagesFromUserDM(userId);
-      totalDeleted += Number(result?.deleted || 0);
-      totalFailed += Number(result?.failed || 0);
-    }
-
-    console.log(
-      `[RankCall DM] Limpeza concluída. ${totalDeleted} mensagem(ns) apagada(s), ${totalFailed} falha(s).`
-    );
-  } finally {
-    rankCallDmCleanupRunning = false;
-  }
-}
-let rankCallStreakEvaluationRunning = false;
 
 async function evaluateRankCallStreaks(now = Date.now()) {
-  // Vários pontos do bot podem disparar esta avaliação quase ao mesmo tempo.
-  // Evite execuções concorrentes, que poderiam enviar a mesma DM mais de uma vez.
-  if (rankCallStreakEvaluationRunning) return false;
-  rankCallStreakEvaluationRunning = true;
-
-  try {
   const today = getRankCallDateKey(now);
   const yesterday = shiftRankCallDate(today, -1);
   let changed = false;
@@ -2001,10 +1701,11 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     // Se ontem não foi cumprido, a sequência atual é quebrada.
     // Isso não impede que uma nova sequência seja iniciada hoje após 30 min.
     if (Number(record.currentStreak) > 0 && !yesterdayQualified && record.missedDayNotified !== yesterday) {
-      // A sequência é quebrada normalmente, mas nenhuma DM de perda é enviada.
+      const oldStreak = Number(record.currentStreak) || 0;
       record.currentStreak = 0;
       record.missedDayNotified = yesterday;
       changed = true;
+      await notifyRankCallStreakBroken(guildId, userId, yesterday, oldStreak);
     }
 
     // Ao atingir 30 min hoje, a data de hoje precisa estar qualificada.
@@ -2029,9 +1730,6 @@ async function evaluateRankCallStreaks(now = Date.now()) {
 
   if (changed) saveRankCallStreaks();
   return changed;
-  } finally {
-    rankCallStreakEvaluationRunning = false;
-  }
 }
 
 function getRankCallStreak(guildId, userId) { return rankCallStreaks.get(`${guildId}:${userId}`) || null; }
@@ -4221,6 +3919,31 @@ async function updateLiveRankPanel(
 
 
 
+async function findExistingRankCallPanel(channel) {
+  try {
+    const messages = await channel.messages.fetch({ limit: 100 });
+    const botId = client.user?.id;
+    if (!botId) return null;
+
+    const configuredTitle = String(rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title).trim();
+    const candidates = [...messages.values()]
+      .filter(message => message.author?.id === botId)
+      .filter(message => Array.isArray(message.embeds) && message.embeds.length > 0)
+      .filter(message => {
+        const firstEmbed = message.embeds[0];
+        const title = String(firstEmbed?.title || '').trim();
+        const footer = String(firstEmbed?.footer?.text || '').trim();
+        return title === configuredTitle || footer.includes('Ranking de horas');
+      })
+      .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
+
+    return candidates[0] || null;
+  } catch (error) {
+    console.warn('[RankCall] Não foi possível procurar painel existente:', error.message);
+    return null;
+  }
+}
+
 async function publishRankCallPanel(
   guild,
   {
@@ -4234,19 +3957,40 @@ async function publishRankCallPanel(
     throw new Error(`Canal RankCall ${RANK_CALL_CHANNEL_ID} não encontrado ou não é de texto.`);
   }
 
-  // O RankCall tem UM único painel oficial. Nunca apagar/criar outro painel.
-  const fixedMessageId = RANK_CALL_MESSAGE_ID;
-  let panel = await channel.messages.fetch(fixedMessageId).catch(() => null);
-  if (!panel) {
-    throw new Error(`Painel oficial do RankCall não encontrado: ${fixedMessageId}. Nenhuma nova mensagem será criada.`);
+  let panel = null;
+
+  if (recreate) {
+    if (rankCallConfig.messageId) {
+      const oldPanel = await channel.messages.fetch(rankCallConfig.messageId).catch(() => null);
+      if (oldPanel) await oldPanel.delete().catch(() => {});
+    }
+    rankCallConfig.messageId = null;
+  } else if (rankCallConfig.messageId) {
+    panel = await channel.messages.fetch(rankCallConfig.messageId).catch(() => null);
+    if (!panel) {
+      console.warn(`[RankCall] Painel salvo ${rankCallConfig.messageId} não existe mais. Criando um novo painel e salvando o novo ID.`);
+      rankCallConfig.messageId = null;
+      saveRankCallConfig();
+    }
+  }
+
+  // Quando o ID salvo sumiu (mensagem apagada, configuração restaurada ou
+  // arquivo novo no Render), tenta reaproveitar um painel do próprio bot antes
+  // de criar outro. Assim o !rankcall não gera duplicatas.
+  if (!panel && !recreate) {
+    panel = await findExistingRankCallPanel(channel);
+    if (panel) {
+      rankCallConfig.messageId = panel.id;
+      console.log(`[RankCall] Painel existente reutilizado: ${panel.id}`);
+    }
   }
 
   const ranking = await getLiveVoiceRanking(guild);
   const hoursView = buildLiveRankEmbed(guild, ranking, page);
+  const streakView = buildRankCallStreakEmbed(guild, streakPage);
 
   rankCallConfig.page = hoursView.safePage;
-  rankCallConfig.streakPage = 0;
-  rankCallConfig.messageId = RANK_CALL_MESSAGE_ID;
+  rankCallConfig.streakPage = streakView.safePage;
 
   const components = [];
   if (hoursView.totalPages > 1) {
@@ -4264,17 +4008,37 @@ async function publishRankCallPanel(
     ));
   }
 
-  const userMentions = hoursView.userIds;
+  if (streakView.totalPages > 1) {
+    components.push(new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rankstreak_prev_${streakView.safePage}`)
+        .setLabel('◀ Sequências')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(streakView.safePage <= 0),
+      new ButtonBuilder()
+        .setCustomId(`rankstreak_next_${streakView.safePage}`)
+        .setLabel('Sequências ▶')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(streakView.safePage >= streakView.totalPages - 1)
+    ));
+  }
+
+  const userMentions = [...new Set([...hoursView.userIds, ...streakView.userIds])];
   const payload = {
-    embeds: [hoursView.embed],
+    embeds: [hoursView.embed, streakView.embed],
     components,
     allowedMentions: { users: userMentions, roles: [] }
   };
 
-  await panel.edit(payload);
+  if (panel) {
+    await panel.edit(payload);
+  } else {
+    panel = await channel.send(payload);
+    console.log(`[RankCall] Novo painel criado: ${panel.id}`);
+  }
 
   rankCallConfig.channelId = RANK_CALL_CHANNEL_ID;
-  rankCallConfig.messageId = RANK_CALL_MESSAGE_ID;
+  rankCallConfig.messageId = panel.id;
   saveRankCallConfig();
   liveRankPanels.set(panel.id, { guildId: guild.id, channelId: channel.id });
   return panel;
@@ -4386,7 +4150,7 @@ async function handleRankCallConfigButton(interaction) {
 
   const id = interaction.customId;
   if (id === 'rankconfig_reset') {
-    rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, channelId: RANK_CALL_CHANNEL_ID, messageId: RANK_CALL_MESSAGE_ID, page: rankCallConfig.page || 0, streakPage: 0 };
+    rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, channelId: RANK_CALL_CHANNEL_ID, messageId: rankCallConfig.messageId, page: rankCallConfig.page || 0, streakPage: rankCallConfig.streakPage || 0 };
     saveRankCallConfig();
     saveRankCallBackup('config-reset');
     await interaction.update({ embeds: [buildRankCallConfigEmbed()], components: buildRankCallConfigComponents() }).catch(() => {});
@@ -4420,12 +4184,8 @@ async function refreshRankCallPanel() {
     const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
     if (!channel?.isTextBased() || !channel.guild) return;
 
-    const panel = await channel.messages.fetch(RANK_CALL_MESSAGE_ID).catch(() => null);
-    if (!panel) {
-      console.warn(`[RankCall] Painel oficial ${RANK_CALL_MESSAGE_ID} não encontrado. Nenhum novo painel será criado.`);
-      return;
-    }
-
+    // O painel é persistente, mas a mensagem pode ter sido apagada manualmente.
+    // Nesse caso o bot recria automaticamente uma única mensagem e grava o novo ID.
     await publishRankCallPanel(channel.guild, {
       page: rankCallConfig.page || 0,
       streakPage: rankCallConfig.streakPage || 0
@@ -4476,8 +4236,7 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     if (command === 'rankrecreate') {
-      await publishRankCallPanel(message.guild, { page: 0 });
-      await message.channel.send('✅ Painel oficial do RankCall atualizado.').catch(() => {});
+      await publishRankCallPanel(message.guild, { recreate: true, page: 0, streakPage: 0 });
       return true;
     }
 
@@ -12001,7 +11760,6 @@ client.once(
     initializeRankCallVoiceSessions();
     syncRankCallVoiceSessionsFromVoiceStates();
     checkpointLocalVoiceSessions();
-    void cleanupRankCallDMsOnStartup();
     startRankCallBackupScheduler();
     startRankCallAutoRefresh();
     if (rankCallConfig.messageId) await refreshRankCallPanel();
@@ -12203,6 +11961,23 @@ client.on(
           await publishRankCallPanel(interaction.guild, { page: nextPage, streakPage: rankCallConfig.streakPage || 0 });
         } catch (error) {
           console.error('[RankCall] Paginação de horas:', error.message);
+        }
+        return;
+      }
+
+      if (
+        interaction.isButton() &&
+        /^rankstreak_(prev|next)_\d+$/.test(interaction.customId)
+      ) {
+        try {
+          const match = interaction.customId.match(/^rankstreak_(prev|next)_(\d+)$/);
+          const direction = match[1];
+          const currentPage = Number(match[2]) || 0;
+          const nextPage = Math.max(0, currentPage + (direction === 'next' ? 1 : -1));
+          await interaction.deferUpdate().catch(() => {});
+          await publishRankCallPanel(interaction.guild, { page: rankCallConfig.page || 0, streakPage: nextPage });
+        } catch (error) {
+          console.error('[RankCall] Paginação de sequências:', error.message);
         }
         return;
       }
@@ -13049,24 +12824,11 @@ client.on(
 
         content ===
 
-          '!regras'
-
-      ) {
-        await message.delete().catch(() => {});
-        await refreshRulesPanel(message.guild);
-        return;
-      }
-
-
-      if (
-
-        content ===
-
           '!regras2'
 
       ) {
-        await message.delete().catch(() => {});
         await refreshRules2Panel(message.guild);
+        await message.reply('✅ Painel de regras 2 publicado/atualizado neste canal.');
         return;
       }
 
