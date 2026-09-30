@@ -3868,14 +3868,17 @@ function getRankCallVoiceInfo(guild, userId) {
 
 function buildRankCallRow(guild, row, index) {
   const { channel, isCallPriv, ownerId } = getRankCallVoiceInfo(guild, row.userId);
-  const userMention = `<@${row.userId}>`;
+  const LRI = '\u2066';
+  const PDI = '\u2069';
+
+  const userMention = `${LRI}<@${row.userId}>${PDI}`;
   const callLabel = channel
     ? `${isCallPriv ? '🛠️ ' : ''}<#${channel.id}>${ownerId === row.userId ? ' • 👑 Dono' : ''}`
     : '<a:Loading:1554696306633482252> Fora de call';
   const audioIcon = channel ? '<:audio_larp:1554688509715939350> ' : '';
 
   return [
-    `**${index + 1}.** ${userMention}`,
+    `**${LRI}${index + 1}.${PDI}** ${userMention}`,
     `╰ <:arrow1:1554152798071955477> <a:oceans6_clock:1554152778300002346> **${formatVoiceDuration(row.seconds)}** • ${audioIcon}${callLabel}`
   ].join('\n');
 }
