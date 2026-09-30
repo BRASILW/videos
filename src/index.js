@@ -1910,29 +1910,84 @@ function checkpointLocalVoiceSessions() {
 
   for (const [key, startedAtRaw] of voiceSessions) {
     const startedAt = Number(startedAtRaw);
+
+    if (!Number.isFinite(startedAt) || startedAt <= 0) {
+      continue;
+    }
+
     const elapsedSeconds = Math.floor((now - startedAt) / 1000);
-    if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) continue;
+
+    if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) {
+      continue;
+    }
 
     const [guildId, userId] = key.split(':');
-    if (!guildId || !userId) continue;
+
+    if (!guildId || !userId) {
+      continue;
+    }
 
     if (addRankCallDailySecondsForInterval(guildId, userId, startedAt, now)) {
       streakChanged = true;
     }
 
-    if (!dbReady) {
+    if (dbReady && db) {
+      q(`
+        INSERT INTO bot_users (
+          guild_id,
+          user_id,
+          username,
+          voice_seconds,
+          last_seen
+        )
+        VALUES ($1, $2, $3, $4, NOW())
+        ON CONFLICT (guild_id, user_id)
+        DO UPDATE SET
+          voice_seconds = bot_users.voice_seconds + EXCLUDED.voice_seconds,
+          username = EXCLUDED.username,
+          last_seen = NOW()
+      `, [
+        guildId,
+        userId,
+        String(userId),
+        elapsedSeconds
+      ]).catch((error) => {
+        console.warn(
+          `[RankCall] Erro ao salvar ${guildId}:${userId} no banco:`,
+          error.message
+        );
+      });
+    } else {
       const current = Number(voiceHoursLocal.get(key) || 0);
-      voiceHoursLocal.set(key, current + elapsedSeconds);
+
+      voiceHoursLocal.set(
+        key,
+        current + elapsedSeconds
+      );
+
       voiceHoursChanged = true;
     }
 
-    voiceSessions.set(key, startedAt + elapsedSeconds * 1000);
+    voiceSessions.set(
+      key,
+      startedAt + elapsedSeconds * 1000
+    );
+
     sessionChanged = true;
   }
 
-  if (voiceHoursChanged) saveVoiceHoursLocal();
-  if (sessionChanged) saveVoiceSessionsLocal();
-  if (streakChanged) saveRankCallStreaks();
+  if (voiceHoursChanged) {
+    saveVoiceHoursLocal();
+  }
+
+  if (sessionChanged) {
+    saveVoiceSessionsLocal();
+  }
+
+  if (streakChanged) {
+    saveRankCallStreaks();
+  }
+
   void evaluateRankCallStreaks(now);
 }
 
