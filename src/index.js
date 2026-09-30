@@ -3575,10 +3575,20 @@ async function updateVoiceSession(
   }
 
   await q(`
-    UPDATE bot_users
-    SET voice_seconds = voice_seconds + $3
-    WHERE guild_id = $1 AND user_id = $2
-  `, [guild.id, member.id, seconds]);
+    INSERT INTO bot_users (
+      guild_id,
+      user_id,
+      voice_seconds
+    )
+    VALUES ($1,$2,$3)
+    ON CONFLICT (guild_id,user_id)
+    DO UPDATE SET
+      voice_seconds = bot_users.voice_seconds + EXCLUDED.voice_seconds
+  `, [
+    guild.id,
+    member.id,
+    seconds
+  ]);
 
   await q(`
     DELETE FROM voice_sessions
