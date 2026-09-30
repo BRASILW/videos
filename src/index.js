@@ -1625,12 +1625,40 @@ function loadRankCallStreaks() {
 
 function saveRankCallStreaks() {
   try {
-    fs.writeFileSync(RANK_CALL_STREAKS_FILE, JSON.stringify(Object.fromEntries(rankCallStreaks), null, 2), 'utf8');
+    fs.writeFileSync(
+      RANK_CALL_STREAKS_FILE,
+      JSON.stringify(
+        Object.fromEntries(rankCallStreaks),
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    if (dbReady && db) {
+      for (const [key, record] of rankCallStreaks.entries()) {
+        const parts = String(key).split(':');
+        const guildId = parts.shift();
+        const userId = parts.join(':');
+
+        if (!guildId || !userId || !record) {
+          continue;
+        }
+
+        void persistRankCallStreakToDatabase(
+          guildId,
+          userId,
+          record
+        );
+      }
+    }
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar sequências:', e.message);
+    console.warn(
+      '[RankCall] Erro ao salvar sequências:',
+      e.message
+    );
   }
 }
-
 function getRankCallDateKey(timestamp = Date.now()) {
   const parts = new Intl.DateTimeFormat('en-US', { timeZone: RANK_CALL_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(timestamp));
   return `${parts.find(part => part.type === 'year')?.value || '0000'}-${parts.find(part => part.type === 'month')?.value || '01'}-${parts.find(part => part.type === 'day')?.value || '01'}`;
@@ -1714,19 +1742,52 @@ function addRankCallQualifiedDate(record, dateKey) {
 function addRankCallDailySeconds(guildId, userId, dateKey, seconds) {
   const amount = Math.max(0, Math.floor(Number(seconds) || 0));
   if (amount <= 0) return false;
+
   const record = getOrCreateRankCallStreak(guildId, userId);
-  const before = Number(record.dailySeconds[dateKey] || 0);
-  const after = before + amount;
+  const before = Math.max(
+    0,
+    Math.floor(Number(record.dailySeconds[dateKey]) || 0)
+  );
+
+  const MAX_DAILY_SECONDS = 24 * 60 * 60;
+  const available = Math.max(
+    0,
+    MAX_DAILY_SECONDS - before
+  );
+
+  const appliedAmount = Math.min(
+    amount,
+    available
+  );
+
+  if (appliedAmount <= 0) {
+    return false;
+  }
+
+  const after = before + appliedAmount;
+
   record.dailySeconds[dateKey] = after;
+
   let qualified = false;
-  if (before < RANK_CALL_STREAK_MIN_SECONDS && after >= RANK_CALL_STREAK_MIN_SECONDS) {
+
+  if (
+    before < RANK_CALL_STREAK_MIN_SECONDS &&
+    after >= RANK_CALL_STREAK_MIN_SECONDS
+  ) {
     qualified = addRankCallQualifiedDate(record, dateKey);
   }
-  // O progresso diário também  persistido antes dos 30 minutos,
-  // para que um reincio não apague o que já foi feito naquele dia.
+
+  if (dbReady && db) {
+    void persistRankCallDailyToDatabase(
+      guildId,
+      userId,
+      dateKey,
+      appliedAmount
+    );
+  }
+
   return qualified || after !== before;
 }
-
 function addRankCallDailySecondsForInterval(guildId, userId, startMs, endMs) {
   const start = Number(startMs), end = Number(endMs);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
@@ -1968,10 +2029,30 @@ function checkpointLocalVoiceSessions() {
       voiceHoursChanged = true;
     }
 
+    const newStartedAt = startedAt + elapsedSeconds * 1000;
+
     voiceSessions.set(
       key,
-      startedAt + elapsedSeconds * 1000
+      newStartedAt
     );
+
+    if (dbReady && db) {
+      q(`
+        UPDATE voice_sessions
+        SET started_at = TO_TIMESTAMP($3 / 1000.0)
+        WHERE guild_id = $1
+          AND user_id = $2
+      `, [
+        guildId,
+        userId,
+        newStartedAt
+      ]).catch((error) => {
+        console.warn(
+          `[RankCall] Erro ao atualizar checkpoint da sessão ${guildId}:${userId}:`,
+          error.message
+        );
+      });
+    }
 
     sessionChanged = true;
   }
@@ -2007,6 +2088,7 @@ loadAfkUsers();
 loadVoiceHoursLocal();
 loadVoiceSessionsLocal();
 loadRankCallStreaks();
+
 
 
 
@@ -2257,6 +2339,249 @@ function memberRoleIds(member) {
 
 
 
+async function ensureRankCallDatabaseTables() {
+  if (!dbReady || !db) return;
+
+  try {
+    await q(`
+      CREATE TABLE IF NOT EXISTS rank_call_daily (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        date_key TEXT NOT NULL,
+        seconds BIGINT NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, user_id, date_key)
+      )
+    `);
+
+    await q(`
+      CREATE TABLE IF NOT EXISTS rank_call_streaks (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        dates JSONB NOT NULL DEFAULT '[]'::jsonb,
+        daily_seconds JSONB NOT NULL DEFAULT '{}'::jsonb,
+        current_streak INTEGER NOT NULL DEFAULT 0,
+        best_streak INTEGER NOT NULL DEFAULT 0,
+        last_active_date TEXT NOT NULL DEFAULT '',
+        last_qualified_date TEXT NOT NULL DEFAULT '',
+        missed_day_notified TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (guild_id, user_id)
+      )
+    `);
+
+    console.log('[RankCall] Tabelas PostgreSQL do RankCall verificadas.');
+  } catch (error) {
+    console.warn('[RankCall] Erro ao criar tabelas PostgreSQL:', error.message);
+  }
+}
+
+async function persistRankCallDailyToDatabase(guildId, userId, dateKey, seconds) {
+  if (!dbReady || !db) return;
+
+  const amount = Math.max(0, Math.floor(Number(seconds) || 0));
+  if (amount <= 0) return;
+
+  try {
+    await q(`
+      INSERT INTO rank_call_daily (
+        guild_id,
+        user_id,
+        date_key,
+        seconds
+      )
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (guild_id, user_id, date_key)
+      DO UPDATE SET
+        seconds = EXCLUDED.seconds
+    `, [
+      String(guildId),
+      String(userId),
+      String(dateKey),
+      amount
+    ]);
+  } catch (error) {
+    console.warn(
+      `[RankCall] Erro ao persistir diário ${guildId}:${userId}:${dateKey}:`,
+      error.message
+    );
+  }
+}
+
+async function persistRankCallStreakToDatabase(guildId, userId, record) {
+  if (!dbReady || !db || !record) return;
+
+  try {
+    await q(`
+      INSERT INTO rank_call_streaks (
+        guild_id,
+        user_id,
+        dates,
+        daily_seconds,
+        current_streak,
+        best_streak,
+        last_active_date,
+        last_qualified_date,
+        missed_day_notified,
+        updated_at
+      )
+      VALUES (
+        $1,
+        $2,
+        $3::jsonb,
+        $4::jsonb,
+        $5,
+        $6,
+        $7,
+        $8,
+        $9,
+        NOW()
+      )
+      ON CONFLICT (guild_id, user_id)
+      DO UPDATE SET
+        dates = EXCLUDED.dates,
+        daily_seconds = EXCLUDED.daily_seconds,
+        current_streak = EXCLUDED.current_streak,
+        best_streak = EXCLUDED.best_streak,
+        last_active_date = EXCLUDED.last_active_date,
+        last_qualified_date = EXCLUDED.last_qualified_date,
+        missed_day_notified = EXCLUDED.missed_day_notified,
+        updated_at = NOW()
+    `, [
+      String(guildId),
+      String(userId),
+      JSON.stringify(Array.isArray(record.dates) ? record.dates : []),
+      JSON.stringify(record.dailySeconds && typeof record.dailySeconds === 'object'
+        ? record.dailySeconds
+        : {}),
+      Number(record.currentStreak) || 0,
+      Number(record.bestStreak) || 0,
+      String(record.lastActiveDate || ''),
+      String(record.lastQualifiedDate || ''),
+      String(record.missedDayNotified || '')
+    ]);
+  } catch (error) {
+    console.warn(
+      `[RankCall] Erro ao persistir streak ${guildId}:${userId}:`,
+      error.message
+    );
+  }
+}
+
+async function loadRankCallStreaksFromDatabase() {
+  if (!dbReady || !db) return;
+
+  try {
+    const result = await q(`
+      SELECT
+        guild_id,
+        user_id,
+        dates,
+        daily_seconds,
+        current_streak,
+        best_streak,
+        last_active_date,
+        last_qualified_date,
+        missed_day_notified
+      FROM rank_call_streaks
+    `);
+
+    let loaded = 0;
+
+    for (const row of result.rows || []) {
+      const guildId = String(row.guild_id || '');
+      const userId = String(row.user_id || '');
+
+      if (!guildId || !userId) continue;
+
+      let dates = [];
+      let dailySeconds = {};
+
+      try {
+        dates = Array.isArray(row.dates) ? row.dates : JSON.parse(row.dates || '[]');
+      } catch {
+        dates = [];
+      }
+
+      try {
+        dailySeconds =
+          row.daily_seconds && typeof row.daily_seconds === 'object'
+            ? row.daily_seconds
+            : JSON.parse(row.daily_seconds || '{}');
+      } catch {
+        dailySeconds = {};
+      }
+
+      const MAX_DAILY_SECONDS = 24 * 60 * 60;
+      let dailySecondsChanged = false;
+
+      if (
+        dailySeconds &&
+        typeof dailySeconds === 'object' &&
+        !Array.isArray(dailySeconds)
+      ) {
+        for (const [dateKey, rawSeconds] of Object.entries(dailySeconds)) {
+          const seconds = Math.max(
+            0,
+            Math.floor(Number(rawSeconds) || 0)
+          );
+
+          const safeSeconds = Math.min(
+            seconds,
+            MAX_DAILY_SECONDS
+          );
+
+          if (safeSeconds !== seconds) {
+            console.warn(
+              `[RankCall] Corrigindo diário inválido no PostgreSQL ${guildId}:${userId} | ${dateKey} | ${seconds}s -> ${safeSeconds}s`
+            );
+
+            dailySeconds[dateKey] = safeSeconds;
+            dailySecondsChanged = true;
+          } else {
+            dailySeconds[dateKey] = seconds;
+          }
+        }
+      } else {
+        dailySeconds = {};
+        dailySecondsChanged = true;
+      }
+
+      const key = `${guildId}:${userId}`;
+
+      const record = {
+        dates: Array.isArray(dates) ? dates : [],
+        dailySeconds,
+        currentStreak: Number(row.current_streak) || 0,
+        bestStreak: Number(row.best_streak) || 0,
+        lastActiveDate: String(row.last_active_date || ''),
+        lastQualifiedDate: String(row.last_qualified_date || ''),
+        missedDayNotified: String(row.missed_day_notified || '')
+      };
+
+      rankCallStreaks.set(
+        key,
+        record
+      );
+
+      if (dailySecondsChanged) {
+        void persistRankCallStreakToDatabase(
+          guildId,
+          userId,
+          record
+        );
+      }
+
+      loaded++;
+    }
+
+    if (loaded > 0) {
+      saveRankCallStreaks();
+      console.log(`[RankCall] ${loaded} streak(s) carregada(s) do PostgreSQL.`);
+    }
+  } catch (error) {
+    console.warn('[RankCall] Erro ao carregar streaks do PostgreSQL:', error.message);
+  }
+}
 async function initDB() {
 
   if (
@@ -7258,27 +7583,74 @@ function syncRankCallVoiceSessionsFromVoiceStates() {
 
   for (const guild of client.guilds.cache.values()) {
     const states = guild.voiceStates?.cache;
-    if (!states) continue;
+
+    if (!states) {
+      continue;
+    }
 
     for (const state of states.values()) {
-      const userId = state?.id || state?.member?.id || null;
-      if (!state?.channelId || !userId) continue;
-      if (state?.member?.user?.bot) continue;
+      const userId =
+        state?.id ||
+        state?.member?.id ||
+        null;
+
+      if (!state?.channelId || !userId) {
+        continue;
+      }
+
+      if (state?.member?.user?.bot) {
+        continue;
+      }
 
       const key = `${guild.id}:${userId}`;
-      if (!voiceSessions.has(key)) {
-        // Recupera sessões que já estavam em call quando o bot terminou de conectar
-        // ou quando um VoiceStateUpdate foi perdido temporariamente.
-        voiceSessions.set(key, Date.now());
-        changed = true;
+
+      if (voiceSessions.has(key)) {
+        continue;
+      }
+
+      const startedAt = Date.now();
+
+      voiceSessions.set(
+        key,
+        startedAt
+      );
+
+      changed = true;
+
+      if (dbReady && db) {
+        q(`
+          INSERT INTO voice_sessions (
+            guild_id,
+            user_id,
+            started_at
+          )
+          VALUES (
+            $1,
+            $2,
+            TO_TIMESTAMP($3 / 1000.0)
+          )
+          ON CONFLICT (guild_id, user_id)
+          DO NOTHING
+        `, [
+          guild.id,
+          userId,
+          startedAt
+        ]).catch((error) => {
+          console.warn(
+            `[RankCall] Erro ao registrar sessão sincronizada ${guild.id}:${userId}:`,
+            error.message
+          );
+        });
       }
     }
   }
 
-  if (changed) saveVoiceSessionsLocal();
+  if (changed) {
+    saveVoiceSessionsLocal();
+  }
+
   return changed;
 }
-
 function initializeRankCallVoiceSessions() {
   const activeNow = new Set();
   for (const guild of client.guilds.cache.values()) {
@@ -12184,6 +12556,8 @@ client.once(
 
     await initDB();
     await syncLocalVoiceHoursToDatabase();
+    await ensureRankCallDatabaseTables();
+    await loadRankCallStreaksFromDatabase();
     await restoreRankCallVoiceSessionsFromDB();
 
 
