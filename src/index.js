@@ -3884,7 +3884,7 @@ function buildRankCallRow(guild, row, index) {
 
   const userMention = `${LRI}<@${row.userId}>${PDI}`;
   const callLabel = channel
-    ? `${isCallPriv ? '� ' : ''}<#${channel.id}>${ownerId === row.userId ? ' � �Y'' Dono' : ''}`
+    ? `${isCallPriv ? '� ' : ''}<#${channel.id}>${ownerId === row.userId ? ' 👑 Dono' : ''}`
     : '<a:Loading:1554696306633482252> Fora de call';
   const audioIcon = channel ? '<:audio_larp:1554688509715939350> ' : '';
 
@@ -14475,6 +14475,7 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
 
 
 
