@@ -14,3 +14,9 @@ yarn-debug.log*
 yarn-error.log*
 Thumbs.db
 .DS_Store
+
+# Arquivos de estado/runtime do bot
+src/afk-users.json
+src/temp-voice-rooms.json
+src/voice-live-sessions.json
+rankcall-backups/

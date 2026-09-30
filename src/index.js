@@ -2442,6 +2442,73 @@ async function initDB() {
 
 
 
+async function restoreRankCallVoiceSessionsFromDB() {
+  if (!dbReady || !db) return;
+
+  try {
+    const result = await q(`
+      SELECT guild_id, user_id, started_at
+      FROM voice_sessions
+    `);
+
+    if (!result?.rows?.length) return;
+
+    let restored = 0;
+    let removed = 0;
+
+    for (const row of result.rows) {
+      const guildId = String(row.guild_id || '');
+      const userId = String(row.user_id || '');
+
+      if (!guildId || !userId || !row.started_at) {
+        continue;
+      }
+
+      const startedAt = new Date(row.started_at).getTime();
+
+      if (!Number.isFinite(startedAt) || startedAt <= 0) {
+        continue;
+      }
+
+      const guild = client.guilds.cache.get(guildId);
+
+      if (!guild) {
+        await q(`
+          DELETE FROM voice_sessions
+          WHERE guild_id = $1
+            AND user_id = $2
+        `, [guildId, userId]);
+
+        removed++;
+        continue;
+      }
+
+      const voiceState = guild.voiceStates?.cache?.get(userId);
+
+      if (!voiceState?.channelId) {
+        continue;
+      }
+
+      const key = `${guildId}:${userId}`;
+
+      voiceSessions.set(key, startedAt);
+      restored++;
+    }
+
+    saveVoiceSessionsLocal();
+
+    if (restored > 0 || removed > 0) {
+      console.log(
+        `[RankCall] ${restored} sessão(ões) restaurada(s) e ${removed} sessão(ões) antiga(s) removida(s).`
+      );
+    }
+  } catch (error) {
+    console.warn(
+      '[RankCall] Erro ao restaurar sessões do PostgreSQL:',
+      error.message
+    );
+  }
+}
 async function q(
 
   text,
@@ -11913,6 +11980,7 @@ client.once(
 
 
     await initDB();
+    await restoreRankCallVoiceSessionsFromDB();
 
 
 
