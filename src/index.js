@@ -3936,9 +3936,14 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
     footer: `Ranking de horas • Página ${safePage + 1}/${totalPages} • Atualiza a cada 5 segundos  ${guild.name}`
   });
 
-  // A sequência de fogo usa banner próprio e NÃO possui ícone/thumbnail.
-  const RANK_CALL_STREAK_BANNER = 'https://cdn.discordapp.com/attachments/1553979838698885200/1554936187612045404/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abeb2ac&is=6abd612c&hm=5e208e52231ae03a6e070f2f3994e1b3c6d60b36fb6651e9acc8c5b226509211&';
-  embed.setImage(RANK_CALL_STREAK_BANNER);
+  // O ranking normal usa o ícone e o banner configurados no RankCall.
+  if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) {
+    embed.setThumbnail(rankCallConfig.icon);
+  }
+
+  if (rankCallConfig.banner && /^https?:\/\//i.test(rankCallConfig.banner)) {
+    embed.setImage(rankCallConfig.banner);
+  }
 
   return { embed, totalPages, safePage, userIds: rows.map(row => row.userId) };
 }
@@ -4054,8 +4059,9 @@ function buildRankCallStreakEmbed(guild, page = 0) {
     footer: `30 minutos acumulados em call por dia • Dias históricos salvos • Página ${safePage + 1}/${totalPages}  ${guild.name}`
   });
 
-  if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
-  if (rankCallConfig.banner && /^https?:\/\//i.test(rankCallConfig.banner)) embed.setImage(rankCallConfig.banner);
+  // A sequência de fogo tem somente o banner próprio; não usa ícone/thumbnail.
+  const RANK_CALL_STREAK_BANNER = 'https://cdn.discordapp.com/attachments/1553979838698885200/1554936187612045404/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abeb2ac&is=6abd612c&hm=5e208e52231ae03a6e070f2f3994e1b3c6d60b36fb6651e9acc8c5b226509211&';
+  embed.setImage(RANK_CALL_STREAK_BANNER);
 
   return { embed, totalPages, safePage, userIds: rows.map(row => row.userId) };
 }
