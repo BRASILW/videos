@@ -3903,8 +3903,7 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
 
   const description = rows.length
     ? rows.map((row, index) => buildRankCallRow(guild, row, start + index)).join('\n\n')
-    : '=
- Nenhum usu�rio possui horas registradas em call.';
+    : 'Nenhum usuário possui horas registradas em call.';
 
   const embed = createEmbed({
     title: String(rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title).slice(0, 256),
@@ -14475,6 +14474,7 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
 
 
 
