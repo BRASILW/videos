@@ -3941,13 +3941,13 @@ function buildRankCallGeneralEmbed(guild, ranking, page = 0, userId = null) {
       const position = start + index + 1;
       const duration = formatVoiceDuration(row.seconds);
 
-      let prefix = `**${position}�**`;
+      let prefix = `**${position}º**`;
 
-      if (position === 1) prefix = '�Y'o **1�**';
-      if (position === 2) prefix = '�Y'o **2�**';
-      if (position === 3) prefix = '�Y'o **3�**';
+if (position === 1) prefix = '🥇 **1º**';
+if (position === 2) prefix = '🥈 **2º**';
+if (position === 3) prefix = '🥉 **3º**';
 
-      return `${prefix} <@${row.userId}> �" **${duration}**`;
+return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
     })
     .join('\n');
 
@@ -14474,6 +14474,7 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
 
 
 
