@@ -3855,6 +3855,7 @@ function buildRankCallGeneralEmbed(guild, ranking, page = 0, userId = null) {
   const userPosition = userIndex >= 0 ? userIndex + 1 : 0;
 
   const topThree = rows
+    .slice(0, 3)
     .map((row, index) => {
       const position = start + index + 1;
       const duration = formatVoiceDuration(row.seconds);
@@ -3915,7 +3916,12 @@ function buildRankCallGeneralEmbed(guild, ranking, page = 0, userId = null) {
         .setCustomId(`rankcall_general_next_${safePage}`)
         .setLabel('▶️')
         .setStyle(ButtonStyle.Primary)
-        .setDisabled(safePage >= totalPages - 1)
+        .setDisabled(safePage >= totalPages - 1),
+
+      new ButtonBuilder()
+        .setCustomId('rankcall_general_id')
+        .setLabel('🔎 ID')
+        .setStyle(ButtonStyle.Secondary)
     )
   ];
 
@@ -12145,6 +12151,91 @@ client.on(
             '[RankCall] Erro na paginação do painel Geral:',
             error.message
           );
+        }
+
+        return;
+      }
+      if (
+        interaction.isButton() &&
+        interaction.customId === 'rankcall_general_id'
+      ) {
+        const modal = new ModalBuilder()
+          .setCustomId('rankcall_general_id_modal')
+          .setTitle('🔎 Consultar por ID');
+
+        const idInput = new TextInputBuilder()
+          .setCustomId('user_id')
+          .setLabel('ID do usuário')
+          .setPlaceholder('Ex.: 123456789012345678')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
+          .setMinLength(17)
+          .setMaxLength(20);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(idInput)
+        );
+
+        await interaction.showModal(modal);
+        return;
+      }
+      if (
+        interaction.isModalSubmit() &&
+        interaction.customId === 'rankcall_general_id_modal'
+      ) {
+        try {
+          const userId = interaction.fields.getTextInputValue('user_id').trim();
+
+          if (!/^\d{17,20}$/.test(userId)) {
+            await interaction.reply({
+              content: '❌ ID de usuário inválido. Informe um ID numérico válido do Discord.',
+              ephemeral: true
+            });
+            return;
+          }
+
+          const ranking = await getLiveVoiceRanking(interaction.guild);
+          const userIndex = ranking.findIndex(row => row.userId === userId);
+
+          if (userIndex === -1) {
+            await interaction.reply({
+              content: '❌ Esse usuário não possui horas registradas no ranking.',
+              ephemeral: true
+            });
+            return;
+          }
+
+          const pageSize = 10;
+          const userPage = Math.floor(userIndex / pageSize);
+
+          const generalView = buildRankCallGeneralEmbed(
+            interaction.guild,
+            ranking,
+            userPage,
+            userId
+          );
+
+          await interaction.reply({
+            embeds: [generalView.embed],
+            components: generalView.components,
+            ephemeral: true,
+            allowedMentions: {
+              users: generalView.userIds,
+              roles: []
+            }
+          });
+        } catch (error) {
+          console.error(
+            '[RankCall] Erro ao consultar ranking por ID:',
+            error.message
+          );
+
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content: '❌ Não foi possível consultar esse ID agora.',
+              ephemeral: true
+            }).catch(() => {});
+          }
         }
 
         return;
