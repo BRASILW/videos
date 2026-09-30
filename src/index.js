@@ -3933,7 +3933,10 @@ async function findExistingRankCallPanel(channel) {
     const botId = client.user?.id;
     if (!botId) return null;
 
-    const configuredTitle = String(rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title).trim();
+    const configuredTitle = String(
+      rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title
+    ).trim();
+
     const candidates = [...messages.values()]
       .filter(message => message.author?.id === botId)
       .filter(message => Array.isArray(message.embeds) && message.embeds.length > 0)
@@ -3941,25 +3944,30 @@ async function findExistingRankCallPanel(channel) {
         const firstEmbed = message.embeds[0];
         const title = String(firstEmbed?.title || '').trim();
         const footer = String(firstEmbed?.footer?.text || '').trim();
-        return title === configuredTitle || footer.includes('Ranking de horas');
+
+        return (
+          title === configuredTitle ||
+          footer.includes('Ranking de horas')
+        );
       })
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
-    const selected = candidates[0] || null;
-
-    // Se houver mais de um painel do RankCall, mantém somente o mais recente.
-    for (const duplicate of candidates.slice(1)) {
-      await duplicate.delete().catch(() => {});
-      console.log(`[RankCall] Painel duplicado removido: ${duplicate.id}`);
+    // Não reutiliza painel antigo.
+    // Todos os painéis antigos encontrados serão removidos.
+    for (const oldPanel of candidates) {
+      await oldPanel.delete().catch(() => {});
+      console.log(`[RankCall] Painel antigo removido: ${oldPanel.id}`);
     }
 
-    return selected;
+    return null;
   } catch (error) {
-    console.warn('[RankCall] NÃ£o foi possÃ­vel procurar painel existente:', error.message);
+    console.warn(
+      '[RankCall] Não foi possível limpar painéis antigos:',
+      error.message
+    );
     return null;
   }
 }
-
 async function publishRankCallPanel(
   guild,
   {
