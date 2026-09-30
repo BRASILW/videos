@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 
 // MantÃ©m o processo vivo em rejeiÃ§Ãµes assÃ­ncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
@@ -3578,16 +3578,15 @@ async function getLiveVoiceRanking(
 
     ) {
 
+      const dbVoiceSeconds = Number(row.voice_seconds || 0);
+
+      console.log(
+        `[RankCall] DB DEBUG | user=${row.user_id} | voice_seconds=${dbVoiceSeconds} | formatado=${formatVoiceDuration(dbVoiceSeconds)}`
+      );
+
       ranking.set(
-
         row.user_id,
-
-        Number(
-
-          row.voice_seconds || 0
-
-        )
-
+        dbVoiceSeconds
       );
 
     }
