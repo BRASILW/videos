@@ -3948,29 +3948,31 @@ async function findExistingRankCallPanel(channel) {
       })
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
-    // Não reutiliza painel antigo.
-    // Remove todos os painéis antigos encontrados.
-    for (const oldPanel of candidates) {
+    const panel = candidates[0] || null;
+
+    // Se existirem vários painéis antigos, mantém somente o mais recente.
+    for (const duplicate of candidates.slice(1)) {
       try {
-        await oldPanel.delete();
-        console.log(`[RankCall] Painel antigo removido: ${oldPanel.id}`);
-      } catch (deleteError) {
+        await duplicate.delete();
+        console.log(`[RankCall] Painel duplicado removido: ${duplicate.id}`);
+      } catch (error) {
         console.error(
-          `[RankCall] ERRO ao apagar painel antigo ${oldPanel.id}:`,
-          deleteError?.message || deleteError
+          `[RankCall] Não foi possível remover painel duplicado ${duplicate.id}:`,
+          error?.message || error
         );
       }
     }
 
-    return null;
+    return panel;
   } catch (error) {
     console.warn(
-      '[RankCall] Não foi possível limpar painéis antigos:',
+      '[RankCall] Não foi possível procurar painel existente:',
       error.message
     );
     return null;
   }
 }
+
 async function publishRankCallPanel(
   guild,
   {
@@ -3980,36 +3982,29 @@ async function publishRankCallPanel(
   } = {}
 ) {
   const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
+
   if (!channel || !channel.isTextBased()) {
-    throw new Error(`Canal RankCall ${RANK_CALL_CHANNEL_ID} nÃ£o encontrado ou nÃ£o Ã© de texto.`);
+    throw new Error(
+      `Canal RankCall ${RANK_CALL_CHANNEL_ID} não encontrado ou não é de texto.`
+    );
   }
 
-  let panel = null;
+  // NÃO usa nem salva ID de mensagem.
+  // O painel é localizado pelo conteúdo do próprio painel.
+  let panel = await findExistingRankCallPanel(channel);
 
-  if (recreate) {
-    if (rankCallConfig.messageId) {
-      const oldPanel = await channel.messages.fetch(rankCallConfig.messageId).catch(() => null);
-      if (oldPanel) await oldPanel.delete().catch(() => {});
+  if (recreate && panel) {
+    try {
+      await panel.delete();
+      console.log(`[RankCall] Painel anterior removido: ${panel.id}`);
+    } catch (error) {
+      console.error(
+        '[RankCall] Não foi possível remover o painel anterior:',
+        error?.message || error
+      );
     }
-    rankCallConfig.messageId = null;
-  } else if (rankCallConfig.messageId) {
-    panel = await channel.messages.fetch(rankCallConfig.messageId).catch(() => null);
-    if (!panel) {
-      console.warn(`[RankCall] Painel salvo ${rankCallConfig.messageId} nÃ£o existe mais. Criando um novo painel e salvando o novo ID.`);
-      rankCallConfig.messageId = null;
-      saveRankCallConfig();
-    }
-  }
 
-  // Quando o ID salvo sumiu (mensagem apagada, configuraÃ§Ã£o restaurada ou
-  // arquivo novo no Render), tenta reaproveitar um painel do prÃ³prio bot antes
-  // de criar outro. Assim o !rankcall nÃ£o gera duplicatas.
-  if (!panel && !recreate) {
-    panel = await findExistingRankCallPanel(channel);
-    if (panel) {
-      rankCallConfig.messageId = panel.id;
-      console.log(`[RankCall] Painel existente reutilizado: ${panel.id}`);
-    }
+    panel = null;
   }
 
   const ranking = await getLiveVoiceRanking(guild);
@@ -4020,41 +4015,59 @@ async function publishRankCallPanel(
   rankCallConfig.streakPage = streakView.safePage;
 
   const components = [];
+
   if (hoursView.totalPages > 1) {
-    components.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`rankcall_prev_${hoursView.safePage}`)
-        .setLabel('â—€ Horas')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(hoursView.safePage <= 0),
-      new ButtonBuilder()
-        .setCustomId(`rankcall_next_${hoursView.safePage}`)
-        .setLabel('Horas â–¶')
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(hoursView.safePage >= hoursView.totalPages - 1)
-    ));
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rankcall_prev_${hoursView.safePage}`)
+          .setLabel('? Horas')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(hoursView.safePage <= 0),
+        new ButtonBuilder()
+          .setCustomId(`rankcall_next_${hoursView.safePage}`)
+          .setLabel('Horas ?')
+          .setStyle(ButtonStyle.Secondary)
+          .setDisabled(
+            hoursView.safePage >= hoursView.totalPages - 1
+          )
+      )
+    );
   }
 
   if (streakView.totalPages > 1) {
-    components.push(new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId(`rankstreak_prev_${streakView.safePage}`)
-        .setLabel('â—€ SequÃªncias')
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(streakView.safePage <= 0),
-      new ButtonBuilder()
-        .setCustomId(`rankstreak_next_${streakView.safePage}`)
-        .setLabel('SequÃªncias â–¶')
-        .setStyle(ButtonStyle.Success)
-        .setDisabled(streakView.safePage >= streakView.totalPages - 1)
-    ));
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`rankstreak_prev_${streakView.safePage}`)
+          .setLabel('? Sequências')
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(streakView.safePage <= 0),
+        new ButtonBuilder()
+          .setCustomId(`rankstreak_next_${streakView.safePage}`)
+          .setLabel('Sequências ?')
+          .setStyle(ButtonStyle.Success)
+          .setDisabled(
+            streakView.safePage >= streakView.totalPages - 1
+          )
+      )
+    );
   }
 
-  const userMentions = [...new Set([...hoursView.userIds, ...streakView.userIds])];
+  const userMentions = [
+    ...new Set([
+      ...hoursView.userIds,
+      ...streakView.userIds
+    ])
+  ];
+
   const payload = {
     embeds: [hoursView.embed, streakView.embed],
     components,
-    allowedMentions: { users: userMentions, roles: [] }
+    allowedMentions: {
+      users: userMentions,
+      roles: []
+    }
   };
 
   if (panel) {
@@ -4064,13 +4077,16 @@ async function publishRankCallPanel(
     console.log(`[RankCall] Novo painel criado: ${panel.id}`);
   }
 
-  rankCallConfig.channelId = RANK_CALL_CHANNEL_ID;
-  rankCallConfig.messageId = panel.id;
-  saveRankCallConfig();
-  liveRankPanels.set(panel.id, { guildId: guild.id, channelId: channel.id });
+  // IMPORTANTE:
+  // Não salvar messageId.
+  // O painel será reencontrado pelo conteúdo na próxima atualização.
+  liveRankPanels.set(panel.id, {
+    guildId: guild.id,
+    channelId: channel.id
+  });
+
   return panel;
 }
-
 function buildRankCallConfigEmbed() {
   return createEmbed({
     title: 'âš™ï¸ ConfiguraÃ§Ã£o do RankCall',
@@ -4177,7 +4193,7 @@ async function handleRankCallConfigButton(interaction) {
 
   const id = interaction.customId;
   if (id === 'rankconfig_reset') {
-    rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, channelId: RANK_CALL_CHANNEL_ID, messageId: rankCallConfig.messageId, page: rankCallConfig.page || 0, streakPage: rankCallConfig.streakPage || 0 };
+    rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, channelId: RANK_CALL_CHANNEL_ID, page: rankCallConfig.page || 0, streakPage: rankCallConfig.streakPage || 0 };
     saveRankCallConfig();
     saveRankCallBackup('config-reset');
     await interaction.update({ embeds: [buildRankCallConfigEmbed()], components: buildRankCallConfigComponents() }).catch(() => {});
@@ -11789,7 +11805,7 @@ client.once(
     checkpointLocalVoiceSessions();
     startRankCallBackupScheduler();
     startRankCallAutoRefresh();
-    if (rankCallConfig.messageId) await refreshRankCallPanel();
+    await refreshRankCallPanel();
     await restoreAfkUsersOnReady();
 
 
