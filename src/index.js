@@ -3968,7 +3968,7 @@ return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
         : ''
     ].filter(Boolean).join('\n'),
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `Ranking - Pgina ${safePage + 1} de ${totalPages}  ${guild.name}`
+    footer: `Ranking - Página ${safePage + 1} de ${totalPages} • ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) {
@@ -3983,25 +3983,19 @@ return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`rankcall_general_prev_${safePage}`)
-        .setLabel('-?')
+        .setLabel('Anterior')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(safePage <= 0),
 
       new ButtonBuilder()
-        .setCustomId(`rankcall_general_page_${safePage}`)
-        .setLabel(`#${safePage}`)
-        .setStyle(ButtonStyle.Secondary)
-        .setDisabled(true),
-
-      new ButtonBuilder()
         .setCustomId(`rankcall_general_next_${safePage}`)
-        .setLabel('-')
+        .setLabel('Próximo')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(safePage >= totalPages - 1),
 
       new ButtonBuilder()
         .setCustomId('rankcall_general_id')
-        .setLabel('Y"Z ID')
+        .setLabel('ID')
         .setStyle(ButtonStyle.Secondary)
     )
   ];
@@ -4516,8 +4510,11 @@ async function handleRankCallPrefixCommand(message) {
 
     const key = `${message.guild.id}:${target.id}`;
     const current = Number(voiceHoursLocal.get(key) || 0);
-    const rawHours = parts.find(value => /^\d+(?:[.,]\d+)?$/.test(value));
-    const hours = Number.parseFloat(String(rawHours || '0').replace(',', '.'));
+    // Aceita a quantidade no formato usado pelo comando: !rankadd @usuario 2h
+    // Também mantém compatibilidade com o formato antigo sem o sufixo: !rankadd @usuario 2
+    const rawHours = parts.find(value => /^(?:\d+(?:[.,]\d+)?h?|\d+(?:[.,]\d+)?)$/i.test(value));
+    const normalizedHours = String(rawHours || '').trim().replace(/h$/i, '').replace(',', '.');
+    const hours = Number.parseFloat(normalizedHours || '0');
 
     if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0)) {
       await message.channel.send('L Informe uma quantidade de horas vlida.').catch(() => {});
@@ -4530,7 +4527,17 @@ async function handleRankCallPrefixCommand(message) {
     } else if (command === 'rankremove') {
       voiceHoursLocal.set(key, Math.max(0, current - Math.round(hours * 3600)));
     } else if (command === 'rankadd') {
-      voiceHoursLocal.set(key, Math.max(0, current + Math.round(hours * 3600)));
+      const addedSeconds = Math.max(0, Math.round(hours * 3600));
+      voiceHoursLocal.set(key, Math.max(0, current + addedSeconds));
+
+      // O !rankadd também precisa contar as horas adicionadas para a
+      // sequência do dia e persistir imediatamente no JSON.
+      if (addedSeconds > 0) {
+        const today = getRankCallDateKey();
+        addRankCallDailySeconds(message.guild.id, target.id, today, addedSeconds);
+        saveRankCallStreaks();
+        void evaluateRankCallStreaks();
+      }
     } else if (command === 'rankset') {
       voiceHoursLocal.set(key, Math.max(0, Math.round(hours * 3600)));
       if (voiceSessions.has(key)) voiceSessions.set(key, Date.now());
