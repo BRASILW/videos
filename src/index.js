@@ -1,10 +1,10 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
-// Mantém o processo vivo em rejeições assíncronas conhecidas do sistema de voz.
+// MantÃ©m o processo vivo em rejeiÃ§Ãµes assÃ­ncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
   const message = String(reason?.message || reason || '');
   if (message.includes('Shard 0 not found') || message.includes('Cannot perform IP discovery - socket closed')) {
-    console.warn(`[Voice] Rejeição assíncrona de voz ignorada: ${message}`);
+    console.warn(`[Voice] RejeiÃ§Ã£o assÃ­ncrona de voz ignorada: ${message}`);
     return;
   }
   console.error('[unhandledRejection]', reason);
@@ -92,7 +92,7 @@ try {
 
   console.warn(
 
-    '[DB] Pacote pg não instalado. Instale com: npm i pg'
+    '[DB] Pacote pg nÃ£o instalado. Instale com: npm i pg'
 
   );
 
@@ -108,7 +108,7 @@ if (!token) {
 
   console.error(
 
-    'ERRO CRÍTICO: Defina DISCORD_TOKEN no .env.'
+    'ERRO CRÃTICO: Defina DISCORD_TOKEN no .env.'
 
   );
 
@@ -209,13 +209,13 @@ const RULES_CONFIG_FILE =
   path.join(__dirname, 'rules-panel-config.json');
 
 let rulesPanelConfig = {
-  title: '📜 Regras do Servidor',
+  title: 'ðŸ“œ Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Leia com atenção antes de participar.',
-  rulesText: '1️⃣ Respeite todos os membros.\n\n2️⃣ Não faça spam ou flood.\n\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\n\n4️⃣ Use cada canal para sua finalidade.\n\n5️⃣ Siga as regras do Discord e as orientações da equipe.',
+  footer: 'Leia com atenÃ§Ã£o antes de participar.',
+  rulesText: '1ï¸âƒ£ Respeite todos os membros.\n\n2ï¸âƒ£ NÃ£o faÃ§a spam ou flood.\n\n3ï¸âƒ£ NÃ£o divulgue servidores, links ou serviÃ§os sem autorizaÃ§Ã£o.\n\n4ï¸âƒ£ Use cada canal para sua finalidade.\n\n5ï¸âƒ£ Siga as regras do Discord e as orientaÃ§Ãµes da equipe.',
   messageId: ''
 };
 
@@ -227,14 +227,14 @@ try {
     };
   }
 } catch (e) {
-  console.warn('[Rules] Erro ao carregar configuração:', e.message);
+  console.warn('[Rules] Erro ao carregar configuraÃ§Ã£o:', e.message);
 }
 
 function saveRulesPanelConfig() {
   try {
     fs.writeFileSync(RULES_CONFIG_FILE, JSON.stringify(rulesPanelConfig, null, 2), 'utf8');
   } catch (e) {
-    console.error('[Rules] Erro ao salvar configuração:', e.message);
+    console.error('[Rules] Erro ao salvar configuraÃ§Ã£o:', e.message);
   }
 }
 
@@ -247,7 +247,7 @@ function isRulesPanelAdmin(member) {
 
 function buildRulesPanelPayload() {
   const embed = createEmbed({
-    title: rulesPanelConfig.title || '📜 Regras do Servidor',
+    title: rulesPanelConfig.title || 'ðŸ“œ Regras do Servidor',
     description: `${rulesPanelConfig.description || ''}\n\n${rulesPanelConfig.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rulesPanelConfig.color || '#5865F2',
     footer: rulesPanelConfig.footer || undefined
@@ -263,12 +263,12 @@ function buildRulesPanelPayload() {
         new ButtonBuilder()
           .setCustomId('rules_admin_edit')
           .setLabel('Editar regras')
-          .setEmoji('📜')
+          .setEmoji('ðŸ“œ')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId('rules_admin_appearance')
-          .setLabel('Alterar aparência')
-          .setEmoji('🎨')
+          .setLabel('Alterar aparÃªncia')
+          .setEmoji('ðŸŽ¨')
           .setStyle(ButtonStyle.Secondary)
       )
     ]
@@ -279,7 +279,7 @@ async function refreshRulesPanel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES_CHANNEL_ID).catch(() => null);
   if (!channel?.isTextBased()) {
-    console.warn(`[Rules] Canal ${RULES_CHANNEL_ID} não encontrado ou não é de texto.`);
+    console.warn(`[Rules] Canal ${RULES_CHANNEL_ID} nÃ£o encontrado ou nÃ£o Ã© de texto.`);
     return false;
   }
 
@@ -289,11 +289,11 @@ async function refreshRulesPanel(guild) {
     const missing = [
       [PermissionFlagsBits.ViewChannel, 'Ver canal'],
       [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
-      [PermissionFlagsBits.ReadMessageHistory, 'Ver histórico de mensagens'],
+      [PermissionFlagsBits.ReadMessageHistory, 'Ver histÃ³rico de mensagens'],
       [PermissionFlagsBits.ManageMessages, 'Gerenciar mensagens'],
       [PermissionFlagsBits.EmbedLinks, 'Incorporar links']
     ].filter(([flag]) => !permissions.has(flag)).map(([, name]) => name);
-    throw Object.assign(new Error(`Permissões ausentes: ${missing.join(', ')}`), { code: 50013, missing });
+    throw Object.assign(new Error(`PermissÃµes ausentes: ${missing.join(', ')}`), { code: 50013, missing });
   }
 
   if (rulesPanelConfig.messageId) {
@@ -328,15 +328,15 @@ function startRulesAutoRefresh() {
 
 async function handleRulesButton(interaction) {
   if (!isRulesPanelAdmin(interaction.member)) {
-    return interaction.reply({ content: '❌ Apenas administradores ou membros autorizados podem configurar as regras.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'âŒ Apenas administradores ou membros autorizados podem configurar as regras.', flags: MessageFlags.Ephemeral });
   }
 
   if (interaction.customId === 'rules_admin_edit') {
-    const modal = new ModalBuilder().setCustomId('rules_edit_modal').setTitle('📜 Editar regras');
+    const modal = new ModalBuilder().setCustomId('rules_edit_modal').setTitle('ðŸ“œ Editar regras');
 
     const titleInput = new TextInputBuilder()
       .setCustomId('title')
-      .setLabel('Título')
+      .setLabel('TÃ­tulo')
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setMaxLength(256)
@@ -344,7 +344,7 @@ async function handleRulesButton(interaction) {
 
     const descriptionInput = new TextInputBuilder()
       .setCustomId('description')
-      .setLabel('Descrição')
+      .setLabel('DescriÃ§Ã£o')
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(false)
       .setMaxLength(1000)
@@ -369,25 +369,25 @@ async function handleRulesButton(interaction) {
   if (interaction.customId === 'rules_admin_appearance') {
     const menu = new StringSelectMenuBuilder()
       .setCustomId('rules_appearance_select')
-      .setPlaceholder('🎨 Escolha o que deseja alterar')
+      .setPlaceholder('ðŸŽ¨ Escolha o que deseja alterar')
       .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('Título').setDescription('Altera o título do embed.').setEmoji('✏️').setValue('title'),
-        new StringSelectMenuOptionBuilder().setLabel('Descrição').setDescription('Altera a descrição do embed.').setEmoji('📝').setValue('description'),
-        new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('🎨').setValue('color'),
-        new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('🖼️').setValue('banner'),
-        new StringSelectMenuOptionBuilder().setLabel('Ícone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('🖼️').setValue('icon'),
-        new StringSelectMenuOptionBuilder().setLabel('Rodapé').setDescription('Altera o texto do rodapé.').setEmoji('📌').setValue('footer')
+        new StringSelectMenuOptionBuilder().setLabel('TÃ­tulo').setDescription('Altera o tÃ­tulo do embed.').setEmoji('âœï¸').setValue('title'),
+        new StringSelectMenuOptionBuilder().setLabel('DescriÃ§Ã£o').setDescription('Altera a descriÃ§Ã£o do embed.').setEmoji('ðŸ“').setValue('description'),
+        new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('ðŸŽ¨').setValue('color'),
+        new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('ðŸ–¼ï¸').setValue('banner'),
+        new StringSelectMenuOptionBuilder().setLabel('Ãcone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('ðŸ–¼ï¸').setValue('icon'),
+        new StringSelectMenuOptionBuilder().setLabel('RodapÃ©').setDescription('Altera o texto do rodapÃ©.').setEmoji('ðŸ“Œ').setValue('footer')
       );
-    return interaction.reply({ content: '🎨 Escolha a aparência que deseja alterar:', components: [new ActionRowBuilder().addComponents(menu)], flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'ðŸŽ¨ Escolha a aparÃªncia que deseja alterar:', components: [new ActionRowBuilder().addComponents(menu)], flags: MessageFlags.Ephemeral });
   }
 }
 
 async function handleRulesAppearanceSelect(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({ content: '❌ Você não possui permissão para configurar as regras.', flags: MessageFlags.Ephemeral });
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({ content: 'âŒ VocÃª nÃ£o possui permissÃ£o para configurar as regras.', flags: MessageFlags.Ephemeral });
   const option = interaction.values[0];
-  const labels = { title:'Título', description:'Descrição', color:'Cor hexadecimal', banner:'URL do banner', icon:'URL do ícone/thumbnail', footer:'Rodapé' };
-  const placeholders = { title:'📜 Regras do Servidor', description:'Leia as regras...', color:'#5865F2', banner:'https://...', icon:'https://...', footer:'Leia com atenção.' };
-  const modal = new ModalBuilder().setCustomId(`rules_config_modal:${option}`).setTitle(`🎨 ${labels[option]}`);
+  const labels = { title:'TÃ­tulo', description:'DescriÃ§Ã£o', color:'Cor hexadecimal', banner:'URL do banner', icon:'URL do Ã­cone/thumbnail', footer:'RodapÃ©' };
+  const placeholders = { title:'ðŸ“œ Regras do Servidor', description:'Leia as regras...', color:'#5865F2', banner:'https://...', icon:'https://...', footer:'Leia com atenÃ§Ã£o.' };
+  const modal = new ModalBuilder().setCustomId(`rules_config_modal:${option}`).setTitle(`ðŸŽ¨ ${labels[option]}`);
   const input = new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setRequired(false).setStyle(option === 'description' || option === 'footer' ? TextInputStyle.Paragraph : TextInputStyle.Short).setMaxLength(1000);
   const current = String(rulesPanelConfig[option] || '');
   if (current) input.setValue(current.slice(0, 1000));
@@ -397,10 +397,10 @@ async function handleRulesAppearanceSelect(interaction) {
 
 async function handleRulesModal(interaction) {
   if (!isRulesPanelAdmin(interaction.member)) {
-    return interaction.reply({ content: '❌ Você não possui permissão para configurar as regras.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'âŒ VocÃª nÃ£o possui permissÃ£o para configurar as regras.', flags: MessageFlags.Ephemeral });
   }
 
-  // Toda atualização que pode apagar/enviar a mensagem precisa reconhecer a interação antes.
+  // Toda atualizaÃ§Ã£o que pode apagar/enviar a mensagem precisa reconhecer a interaÃ§Ã£o antes.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
@@ -409,32 +409,32 @@ async function handleRulesModal(interaction) {
       const description = interaction.fields.getTextInputValue('description').trim();
       const rulesText = interaction.fields.getTextInputValue('rulesText').trim();
 
-      rulesPanelConfig.title = title || '📜 Regras do Servidor';
+      rulesPanelConfig.title = title || 'ðŸ“œ Regras do Servidor';
       rulesPanelConfig.description = description;
       rulesPanelConfig.rulesText = rulesText;
       saveRulesPanelConfig();
       await refreshRulesPanel(interaction.guild);
-      return interaction.editReply({ content: '✅ Título, descrição e texto das regras atualizados.' });
+      return interaction.editReply({ content: 'âœ… TÃ­tulo, descriÃ§Ã£o e texto das regras atualizados.' });
     }
 
     const option = interaction.customId.split(':')[1];
     const value = interaction.fields.getTextInputValue('value').trim();
     if (option === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) {
-      return interaction.editReply({ content: '❌ A cor deve estar no formato `#5865F2`.' });
+      return interaction.editReply({ content: 'âŒ A cor deve estar no formato `#5865F2`.' });
     }
     if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) {
-      return interaction.editReply({ content: '❌ Informe uma URL começando com `http://` ou `https://`.' });
+      return interaction.editReply({ content: 'âŒ Informe uma URL comeÃ§ando com `http://` ou `https://`.' });
     }
 
     rulesPanelConfig[option] = value;
     saveRulesPanelConfig();
     await refreshRulesPanel(interaction.guild);
-    return interaction.editReply({ content: `✅ ${option} atualizado e o painel foi renovado.` });
+    return interaction.editReply({ content: `âœ… ${option} atualizado e o painel foi renovado.` });
   } catch (error) {
-    console.error('[Rules] Erro ao atualizar configuração:', error);
+    console.error('[Rules] Erro ao atualizar configuraÃ§Ã£o:', error);
     return interaction.editReply({ content: error?.code === 50013
-      ? '❌ O bot não tem permissão para apagar/enviar a mensagem no canal de regras. Dê **Gerenciar mensagens**, **Enviar mensagens**, **Ver histórico de mensagens** e **Incorporar links** no canal.'
-      : '❌ Não foi possível atualizar as regras. Verifique as permissões do bot e tente novamente.' });
+      ? 'âŒ O bot nÃ£o tem permissÃ£o para apagar/enviar a mensagem no canal de regras. DÃª **Gerenciar mensagens**, **Enviar mensagens**, **Ver histÃ³rico de mensagens** e **Incorporar links** no canal.'
+      : 'âŒ NÃ£o foi possÃ­vel atualizar as regras. Verifique as permissÃµes do bot e tente novamente.' });
   }
 }
 
@@ -446,13 +446,13 @@ const RULES2_CHANNEL_ID = '1553953899180728372';
 const RULES2_CONFIG_FILE = path.join(__dirname, 'rules-panel-config-2.json');
 
 let rules2Config = {
-  title: '📜 Regras do Servidor',
+  title: 'ðŸ“œ Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Leia com atenção antes de participar.',
-  rulesText: '1️⃣ Respeite todos os membros.\n\n2️⃣ Não faça spam ou flood.\n\n3️⃣ Não divulgue servidores, links ou serviços sem autorização.\n\n4️⃣ Use cada canal para sua finalidade.\n\n5️⃣ Siga as regras do Discord e as orientações da equipe.',
+  footer: 'Leia com atenÃ§Ã£o antes de participar.',
+  rulesText: '1ï¸âƒ£ Respeite todos os membros.\n\n2ï¸âƒ£ NÃ£o faÃ§a spam ou flood.\n\n3ï¸âƒ£ NÃ£o divulgue servidores, links ou serviÃ§os sem autorizaÃ§Ã£o.\n\n4ï¸âƒ£ Use cada canal para sua finalidade.\n\n5ï¸âƒ£ Siga as regras do Discord e as orientaÃ§Ãµes da equipe.',
   messageId: ''
 };
 
@@ -461,17 +461,17 @@ try {
     rules2Config = { ...rules2Config, ...JSON.parse(fs.readFileSync(RULES2_CONFIG_FILE, 'utf8')) };
   }
 } catch (e) {
-  console.warn('[Rules2] Erro ao carregar configuração:', e.message);
+  console.warn('[Rules2] Erro ao carregar configuraÃ§Ã£o:', e.message);
 }
 
 function saveRules2Config() {
   try { fs.writeFileSync(RULES2_CONFIG_FILE, JSON.stringify(rules2Config, null, 2), 'utf8'); }
-  catch (e) { console.error('[Rules2] Erro ao salvar configuração:', e.message); }
+  catch (e) { console.error('[Rules2] Erro ao salvar configuraÃ§Ã£o:', e.message); }
 }
 
 function buildRules2Payload() {
   const embed = createEmbed({
-    title: rules2Config.title || '📜 Regras do Servidor',
+    title: rules2Config.title || 'ðŸ“œ Regras do Servidor',
     description: `${rules2Config.description || ''}\n\n${rules2Config.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rules2Config.color || '#5865F2',
     footer: rules2Config.footer || undefined
@@ -481,8 +481,8 @@ function buildRules2Payload() {
   return {
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rules2_admin_edit').setLabel('Editar regras').setEmoji('📜').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rules2_admin_appearance').setLabel('Alterar aparência').setEmoji('🎨').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('rules2_admin_edit').setLabel('Editar regras').setEmoji('ðŸ“œ').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rules2_admin_appearance').setLabel('Alterar aparÃªncia').setEmoji('ðŸŽ¨').setStyle(ButtonStyle.Secondary)
     )]
   };
 }
@@ -490,14 +490,14 @@ function buildRules2Payload() {
 async function refreshRules2Panel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES2_CHANNEL_ID).catch(() => null);
-  if (!channel?.isTextBased()) throw new Error(`Canal ${RULES2_CHANNEL_ID} não encontrado ou não é de texto.`);
+  if (!channel?.isTextBased()) throw new Error(`Canal ${RULES2_CHANNEL_ID} nÃ£o encontrado ou nÃ£o Ã© de texto.`);
   const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
   const permissions = me ? channel.permissionsFor(me) : null;
   if (permissions && !permissions.has([
     PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages,
     PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages,
     PermissionFlagsBits.EmbedLinks
-  ])) throw Object.assign(new Error('Permissões insuficientes no canal de regras 2.'), {code:50013});
+  ])) throw Object.assign(new Error('PermissÃµes insuficientes no canal de regras 2.'), {code:50013});
   if (rules2Config.messageId) {
     const old = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
     if (old) await old.delete().catch(() => {});
@@ -526,34 +526,34 @@ async function startRules2AutoRefresh() {
 
 async function handleRules2Button(interaction) {
   if (!isRulesPanelAdmin(interaction.member))
-    return interaction.reply({content:'❌ Apenas administradores ou membros autorizados podem configurar as regras.', flags:MessageFlags.Ephemeral});
+    return interaction.reply({content:'âŒ Apenas administradores ou membros autorizados podem configurar as regras.', flags:MessageFlags.Ephemeral});
 
   if (interaction.customId === 'rules2_admin_edit') {
-    const modal = new ModalBuilder().setCustomId('rules2_edit_modal').setTitle('📜 Editar regras 2');
-    const title = new TextInputBuilder().setCustomId('title').setLabel('Título').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(256).setValue(String(rules2Config.title||'').slice(0,256));
-    const desc = new TextInputBuilder().setCustomId('description').setLabel('Descrição').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000).setValue(String(rules2Config.description||'').slice(0,1000));
+    const modal = new ModalBuilder().setCustomId('rules2_edit_modal').setTitle('ðŸ“œ Editar regras 2');
+    const title = new TextInputBuilder().setCustomId('title').setLabel('TÃ­tulo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(256).setValue(String(rules2Config.title||'').slice(0,256));
+    const desc = new TextInputBuilder().setCustomId('description').setLabel('DescriÃ§Ã£o').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000).setValue(String(rules2Config.description||'').slice(0,1000));
     const text = new TextInputBuilder().setCustomId('rulesText').setLabel('Texto das regras').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(3800).setValue(String(rules2Config.rulesText||'').slice(0,3800));
     modal.addComponents(new ActionRowBuilder().addComponents(title),new ActionRowBuilder().addComponents(desc),new ActionRowBuilder().addComponents(text));
     return interaction.showModal(modal);
   }
 
-  const menu = new StringSelectMenuBuilder().setCustomId('rules2_appearance_select').setPlaceholder('🎨 Escolha o que deseja alterar').addOptions(
-    new StringSelectMenuOptionBuilder().setLabel('Título').setDescription('Altera o título do embed.').setEmoji('✏️').setValue('title'),
-    new StringSelectMenuOptionBuilder().setLabel('Descrição').setDescription('Altera a descrição do embed.').setEmoji('📝').setValue('description'),
-    new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('🎨').setValue('color'),
-    new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('🖼️').setValue('banner'),
-    new StringSelectMenuOptionBuilder().setLabel('Ícone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('🖼️').setValue('icon'),
-    new StringSelectMenuOptionBuilder().setLabel('Rodapé').setDescription('Altera o texto do rodapé.').setEmoji('📌').setValue('footer')
+  const menu = new StringSelectMenuBuilder().setCustomId('rules2_appearance_select').setPlaceholder('ðŸŽ¨ Escolha o que deseja alterar').addOptions(
+    new StringSelectMenuOptionBuilder().setLabel('TÃ­tulo').setDescription('Altera o tÃ­tulo do embed.').setEmoji('âœï¸').setValue('title'),
+    new StringSelectMenuOptionBuilder().setLabel('DescriÃ§Ã£o').setDescription('Altera a descriÃ§Ã£o do embed.').setEmoji('ðŸ“').setValue('description'),
+    new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('ðŸŽ¨').setValue('color'),
+    new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('ðŸ–¼ï¸').setValue('banner'),
+    new StringSelectMenuOptionBuilder().setLabel('Ãcone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('ðŸ–¼ï¸').setValue('icon'),
+    new StringSelectMenuOptionBuilder().setLabel('RodapÃ©').setDescription('Altera o texto do rodapÃ©.').setEmoji('ðŸ“Œ').setValue('footer')
   );
-  return interaction.reply({content:'🎨 Escolha a aparência que deseja alterar:',components:[new ActionRowBuilder().addComponents(menu)],flags:MessageFlags.Ephemeral});
+  return interaction.reply({content:'ðŸŽ¨ Escolha a aparÃªncia que deseja alterar:',components:[new ActionRowBuilder().addComponents(menu)],flags:MessageFlags.Ephemeral});
 }
 
 async function handleRules2Appearance(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'❌ Você não possui permissão.',flags:MessageFlags.Ephemeral});
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'âŒ VocÃª nÃ£o possui permissÃ£o.',flags:MessageFlags.Ephemeral});
   const option=interaction.values[0];
-  const labels={title:'Título',description:'Descrição',color:'Cor hexadecimal',banner:'URL do banner',icon:'URL do ícone/thumbnail',footer:'Rodapé'};
-  const placeholders={title:'📜 Regras do Servidor',description:'Leia as regras...',color:'#5865F2',banner:'https://...',icon:'https://...',footer:'Leia com atenção.'};
-  const modal=new ModalBuilder().setCustomId(`rules2_config_modal:${option}`).setTitle(`🎨 ${labels[option]}`);
+  const labels={title:'TÃ­tulo',description:'DescriÃ§Ã£o',color:'Cor hexadecimal',banner:'URL do banner',icon:'URL do Ã­cone/thumbnail',footer:'RodapÃ©'};
+  const placeholders={title:'ðŸ“œ Regras do Servidor',description:'Leia as regras...',color:'#5865F2',banner:'https://...',icon:'https://...',footer:'Leia com atenÃ§Ã£o.'};
+  const modal=new ModalBuilder().setCustomId(`rules2_config_modal:${option}`).setTitle(`ðŸŽ¨ ${labels[option]}`);
   const input=new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setRequired(false).setStyle(option==='description'||option==='footer'?TextInputStyle.Paragraph:TextInputStyle.Short).setMaxLength(1000);
   const current=String(rules2Config[option]||''); if(current) input.setValue(current.slice(0,1000));
   modal.addComponents(new ActionRowBuilder().addComponents(input));
@@ -561,25 +561,25 @@ async function handleRules2Appearance(interaction) {
 }
 
 async function handleRules2Modal(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'❌ Você não possui permissão.',flags:MessageFlags.Ephemeral});
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'âŒ VocÃª nÃ£o possui permissÃ£o.',flags:MessageFlags.Ephemeral});
   await interaction.deferReply({flags:MessageFlags.Ephemeral});
   try {
     if (interaction.customId==='rules2_edit_modal') {
-      rules2Config.title=interaction.fields.getTextInputValue('title').trim()||'📜 Regras do Servidor';
+      rules2Config.title=interaction.fields.getTextInputValue('title').trim()||'ðŸ“œ Regras do Servidor';
       rules2Config.description=interaction.fields.getTextInputValue('description').trim();
       rules2Config.rulesText=interaction.fields.getTextInputValue('rulesText').trim();
       saveRules2Config(); await refreshRules2Panel(interaction.guild);
-      return interaction.editReply({content:'✅ Regras 2 atualizadas.'});
+      return interaction.editReply({content:'âœ… Regras 2 atualizadas.'});
     }
     const option=interaction.customId.split(':')[1];
     const value=interaction.fields.getTextInputValue('value').trim();
-    if(option==='color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({content:'❌ A cor deve estar no formato `#5865F2`.'});
-    if((option==='banner'||option==='icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({content:'❌ Informe uma URL começando com `http://` ou `https://`.'});
+    if(option==='color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({content:'âŒ A cor deve estar no formato `#5865F2`.'});
+    if((option==='banner'||option==='icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({content:'âŒ Informe uma URL comeÃ§ando com `http://` ou `https://`.'});
     rules2Config[option]=value; saveRules2Config(); await refreshRules2Panel(interaction.guild);
-    return interaction.editReply({content:`✅ ${option} atualizado no painel 2.`});
+    return interaction.editReply({content:`âœ… ${option} atualizado no painel 2.`});
   } catch(e) {
     console.error('[Rules2] Erro:',e);
-    return interaction.editReply({content:'❌ Não foi possível atualizar o painel 2. Verifique as permissões do bot no canal.'});
+    return interaction.editReply({content:'âŒ NÃ£o foi possÃ­vel atualizar o painel 2. Verifique as permissÃµes do bot no canal.'});
   }
 }
 // ==================== FIM REGRAS 2 ====================
@@ -616,7 +616,7 @@ const MATCH_CONFIG_FILE =
 
 let matchConfig = {
 
-  title: '💘 Central de Match & Conexões',
+  title: 'ðŸ’˜ Central de Match & ConexÃµes',
 
   description:
 
@@ -664,7 +664,7 @@ try {
 
   console.warn(
 
-    '[Match] Erro ao carregar configuração:',
+    '[Match] Erro ao carregar configuraÃ§Ã£o:',
 
     e.message
 
@@ -721,14 +721,14 @@ const TEMP_VOICE_CONFIG_FILE =
 
 
 let tempVoiceConfig = {
-  title: '🔊 Salas de Voz Temporárias',
+  title: 'ðŸ”Š Salas de Voz TemporÃ¡rias',
   description:
-    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias são excluídas automaticamente conforme o tempo configurado.',
+    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sÃ£o excluÃ­das automaticamente conforme o tempo configurado.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Call Priv • Configuração dinâmica',
-  defaultName: '🔊・{user}',
+  footer: 'Call Priv â€¢ ConfiguraÃ§Ã£o dinÃ¢mica',
+  defaultName: 'ðŸ”Šãƒ»{user}',
   categoryId: TEMP_VOICE_CATEGORY_ID || '',
   deleteAfterMinutes: 5,
   userLimit: 0,
@@ -769,7 +769,7 @@ try {
 
   console.warn(
 
-    '[TempVoice] Erro ao carregar configuração:',
+    '[TempVoice] Erro ao carregar configuraÃ§Ã£o:',
 
     e.message
 
@@ -807,7 +807,7 @@ function saveTempVoiceConfig() {
 
     console.error(
 
-      '[TempVoice] Erro ao salvar configuração:',
+      '[TempVoice] Erro ao salvar configuraÃ§Ã£o:',
 
       e.message
 
@@ -845,7 +845,7 @@ function getTempVoiceOptionDescription(option) {
     rename: 'Altera o nome da sua sala.', lock: 'Impede novas pessoas de entrarem.',
     unlock: 'Permite novamente a entrada.', limit: 'Define o limite de pessoas na sala.',
     kick: 'Escolhe um membro para remover da sala.',
-    transfer: 'Escolhe outro membro como dono da sala.', delete: 'Exclui imediatamente sua sala temporária.'
+    transfer: 'Escolhe outro membro como dono da sala.', delete: 'Exclui imediatamente sua sala temporÃ¡ria.'
   };
   return descriptions[option] || '';
 }
@@ -866,10 +866,10 @@ function resetTempVoiceConfig() {
   const panelChannelId = tempVoiceConfig.panelChannelId || '';
   const panelMessageId = tempVoiceConfig.panelMessageId || '';
   tempVoiceConfig = {
-    title: '🔊 Salas de Voz Temporárias',
-    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias são excluídas automaticamente conforme o tempo configurado.',
-    color: '#5865F2', banner: '', icon: '', footer: 'Call Priv • Configuração dinâmica',
-    defaultName: '🔊・{user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
+    title: 'ðŸ”Š Salas de Voz TemporÃ¡rias',
+    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sÃ£o excluÃ­das automaticamente conforme o tempo configurado.',
+    color: '#5865F2', banner: '', icon: '', footer: 'Call Priv â€¢ ConfiguraÃ§Ã£o dinÃ¢mica',
+    defaultName: 'ðŸ”Šãƒ»{user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
     deleteAfterMinutes: 5, userLimit: 0,
     authorizedRoleId: COMMAND_ACCESS_ROLE_ID || '',
     options: { create: true, rename: true, lock: true, unlock: true, limit: true, kick: true, transfer: true, delete: true },
@@ -891,7 +891,7 @@ try {
 
   console.warn(
 
-    '[Formulario] Módulo não carregado:',
+    '[Formulario] MÃ³dulo nÃ£o carregado:',
 
     e.message
 
@@ -913,7 +913,7 @@ try {
 
   console.warn(
 
-    '[DM] Módulo não carregado:',
+    '[DM] MÃ³dulo nÃ£o carregado:',
 
     e.message
 
@@ -1137,7 +1137,7 @@ const DEFAULT_RANK_CALL_CONFIG = {
   channelId: RANK_CALL_CHANNEL_ID,
   messageId: null,
   page: 0,
-  title: '🏆 Ranking de Horas em Call',
+  title: 'ðŸ† Ranking de Horas em Call',
   description: 'Acompanhe em tempo real quem mais permanece em call.',
   color: '#FEE75C',
   icon: '',
@@ -1162,7 +1162,7 @@ function loadRankCallConfig() {
       color: normalizeHexColor(data?.color || DEFAULT_RANK_CALL_CONFIG.color)
     };
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar configuração:', e.message);
+    console.warn('[RankCall] Erro ao carregar configuraÃ§Ã£o:', e.message);
   }
 }
 
@@ -1170,7 +1170,7 @@ function saveRankCallConfig() {
   try {
     fs.writeFileSync(RANK_CALL_CONFIG_FILE, JSON.stringify(rankCallConfig, null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar configuração:', e.message);
+    console.warn('[RankCall] Erro ao salvar configuraÃ§Ã£o:', e.message);
   }
 }
 
@@ -1208,7 +1208,7 @@ function loadVoiceSessionsLocal() {
       }
     }
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar sessões ativas:', e.message);
+    console.warn('[RankCall] Erro ao carregar sessÃµes ativas:', e.message);
   }
 }
 
@@ -1216,7 +1216,7 @@ function saveVoiceSessionsLocal() {
   try {
     fs.writeFileSync(VOICE_LIVE_SESSIONS_FILE, JSON.stringify(Object.fromEntries(voiceSessions), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar sessões ativas:', e.message);
+    console.warn('[RankCall] Erro ao salvar sessÃµes ativas:', e.message);
   }
 }
 
@@ -1237,9 +1237,9 @@ function loadAfkUsers() {
         activatedAt: Number(raw.activatedAt) || Date.now()
       });
     }
-    if (afkUsers.size) console.log(`[AFK] ${afkUsers.size} usuário(s) AFK carregado(s).`);
+    if (afkUsers.size) console.log(`[AFK] ${afkUsers.size} usuÃ¡rio(s) AFK carregado(s).`);
   } catch (e) {
-    console.warn('[AFK] Erro ao carregar usuários AFK:', e.message);
+    console.warn('[AFK] Erro ao carregar usuÃ¡rios AFK:', e.message);
   }
 }
 
@@ -1247,7 +1247,7 @@ function saveAfkUsers() {
   try {
     fs.writeFileSync(AFK_USERS_FILE, JSON.stringify(Object.fromEntries(afkUsers), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[AFK] Erro ao salvar usuários AFK:', e.message);
+    console.warn('[AFK] Erro ao salvar usuÃ¡rios AFK:', e.message);
   }
 }
 
@@ -1260,7 +1260,7 @@ function getAfkRecord(guildId, userId) {
 }
 
 function formatAfkNickname(originalNickname, username) {
-  const original = String(originalNickname || username || 'Usuário').replace(/^AFK\s*\|\s*/i, '').trim();
+  const original = String(originalNickname || username || 'UsuÃ¡rio').replace(/^AFK\s*\|\s*/i, '').trim();
   const value = `${AFK_NICK_PREFIX}${original}`;
   return value.length > 32 ? value.slice(0, 32) : value;
 }
@@ -1294,7 +1294,7 @@ function findAfkMention(message) {
 }
 
 async function warnAboutAfkMention(message) {
-  const warning = await message.channel.send('o cego não ta vendo o nome da pessoa não? o nome ta afk burro,').catch(() => null);
+  const warning = await message.channel.send('o cego nÃ£o ta vendo o nome da pessoa nÃ£o? o nome ta afk burro,').catch(() => null);
   setTimeout(() => {
     message.delete().catch(() => {});
     warning?.delete().catch(() => {});
@@ -1317,7 +1317,7 @@ async function handleAfkPrefixCommand(message) {
 
   if (command === 'afk') {
     if (afkUsers.has(key)) {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> já está no mundo AFK e não pode ser perturbado.`).catch(() => {});
+      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> jÃ¡ estÃ¡ no mundo AFK e nÃ£o pode ser perturbado.`).catch(() => {});
       return true;
     }
 
@@ -1334,7 +1334,7 @@ async function handleAfkPrefixCommand(message) {
       formatAfkNickname(originalNickname, member.user.username),
       'Entrou no modo AFK'
     ).catch(error => {
-      console.warn('[AFK] Não foi possível alterar o apelido:', error.message);
+      console.warn('[AFK] NÃ£o foi possÃ­vel alterar o apelido:', error.message);
     });
 
     const afkChannel = guild.channels.cache.get(AFK_VOICE_CHANNEL_ID)
@@ -1351,21 +1351,21 @@ async function handleAfkPrefixCommand(message) {
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`${confirmId}:no`)
-          .setLabel('Não')
+          .setLabel('NÃ£o')
           .setStyle(ButtonStyle.Danger)
       );
 
-      // A confirmação precisa ser privada para quem executou !afk.
-      // Prefix commands não suportam mensagens ephemeral, então enviamos a pergunta por DM.
+      // A confirmaÃ§Ã£o precisa ser privada para quem executou !afk.
+      // Prefix commands nÃ£o suportam mensagens ephemeral, entÃ£o enviamos a pergunta por DM.
       await message.channel.send(
-        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`
+        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e nÃ£o pode ser perturbado.`
       ).catch(() => {});
 
       const prompt = await member.user.send({
-        content: `<a:luacancun2:1554021665934155796> **@${member.displayName || member.user.username}** entrou no mundo AFK e não pode ser perturbado.\n\n🔊 Você quer ser movido para **${afkChannel.name}**?`,
+        content: `<a:luacancun2:1554021665934155796> **@${member.displayName || member.user.username}** entrou no mundo AFK e nÃ£o pode ser perturbado.\n\nðŸ”Š VocÃª quer ser movido para **${afkChannel.name}**?`,
         components: [buttons]
       }).catch(error => {
-        console.warn('[AFK] Não foi possível enviar a confirmação por DM:', error.message);
+        console.warn('[AFK] NÃ£o foi possÃ­vel enviar a confirmaÃ§Ã£o por DM:', error.message);
         return null;
       });
 
@@ -1382,12 +1382,12 @@ async function handleAfkPrefixCommand(message) {
               .setDisabled(true),
             new ButtonBuilder()
               .setCustomId(`${confirmId}:no`)
-              .setLabel('Não')
+              .setLabel('NÃ£o')
               .setStyle(ButtonStyle.Danger)
               .setDisabled(true)
           );
           await prompt.edit({
-            content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e não pode ser perturbado.\n\n⏱️ O tempo para escolher terminou. Você permaneceu na call atual.`,
+            content: `<a:luacancun2:1554021665934155796> VocÃª entrou no mundo AFK e nÃ£o pode ser perturbado.\n\nâ±ï¸ O tempo para escolher terminou. VocÃª permaneceu na call atual.`,
             components: [disabled]
           }).catch(() => {});
         }, AFK_MOVE_CONFIRM_TIMEOUT_MS);
@@ -1400,7 +1400,7 @@ async function handleAfkPrefixCommand(message) {
         });
       }
     } else {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`).catch(() => {});
+      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e nÃ£o pode ser perturbado.`).catch(() => {});
     }
 
     return true;
@@ -1408,7 +1408,7 @@ async function handleAfkPrefixCommand(message) {
 
   const record = afkUsers.get(key);
   if (!record) {
-    await message.channel.send(`✅ <@${member.id}>, você não está no modo AFK.`).catch(() => {});
+    await message.channel.send(`âœ… <@${member.id}>, vocÃª nÃ£o estÃ¡ no modo AFK.`).catch(() => {});
     return true;
   }
 
@@ -1423,10 +1423,10 @@ async function handleAfkPrefixCommand(message) {
   saveAfkUsers();
 
   await member.setNickname(record.originalNickname ?? null, 'Saiu do modo AFK').catch(error => {
-    console.warn('[AFK] Não foi possível restaurar o apelido:', error.message);
+    console.warn('[AFK] NÃ£o foi possÃ­vel restaurar o apelido:', error.message);
   });
 
-  await message.channel.send(`☀️ <@${member.id}> saiu do mundo AFK e já pode ser mencionado novamente.`).catch(() => {});
+  await message.channel.send(`â˜€ï¸ <@${member.id}> saiu do mundo AFK e jÃ¡ pode ser mencionado novamente.`).catch(() => {});
   return true;
 }
 
@@ -1441,14 +1441,14 @@ async function handleAfkMoveConfirmation(interaction) {
 
   if (!pending || pending.messageId !== interaction.message.id) {
     await interaction.reply({
-      content: '⏱️ Essa confirmação já expirou.'
+      content: 'â±ï¸ Essa confirmaÃ§Ã£o jÃ¡ expirou.'
     }).catch(() => {});
     return true;
   }
 
   if (interaction.user.id !== userId) {
     await interaction.reply({
-      content: '❌ Somente a pessoa que ativou o AFK pode responder essa confirmação.'
+      content: 'âŒ Somente a pessoa que ativou o AFK pode responder essa confirmaÃ§Ã£o.'
     }).catch(() => {});
     return true;
   }
@@ -1460,7 +1460,7 @@ async function handleAfkMoveConfirmation(interaction) {
   const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
   if (!guild || !member) {
     await interaction.update({
-      content: '⚠️ Não consegui localizar o servidor ou o membro.',
+      content: 'âš ï¸ NÃ£o consegui localizar o servidor ou o membro.',
       components: []
     }).catch(() => {});
     return true;
@@ -1472,22 +1472,22 @@ async function handleAfkMoveConfirmation(interaction) {
 
     if (!afkChannel?.isVoiceBased?.()) {
       await interaction.update({
-        content: `❌ Não encontrei o canal AFK <#${AFK_VOICE_CHANNEL_ID}>. Você permaneceu na call atual.`,
+        content: `âŒ NÃ£o encontrei o canal AFK <#${AFK_VOICE_CHANNEL_ID}>. VocÃª permaneceu na call atual.`,
         components: []
       }).catch(() => {});
       return true;
     }
 
     try {
-      await member.voice.setChannel(afkChannel, 'Confirmação de entrada no modo AFK');
+      await member.voice.setChannel(afkChannel, 'ConfirmaÃ§Ã£o de entrada no modo AFK');
       await interaction.update({
-        content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e foi movido para <#${AFK_VOICE_CHANNEL_ID}>. Não pode ser perturbado.`,
+        content: `<a:luacancun2:1554021665934155796> VocÃª entrou no mundo AFK e foi movido para <#${AFK_VOICE_CHANNEL_ID}>. NÃ£o pode ser perturbado.`,
         components: []
       }).catch(() => {});
     } catch (error) {
-      console.warn('[AFK] Não foi possível mover após confirmação:', error.message);
+      console.warn('[AFK] NÃ£o foi possÃ­vel mover apÃ³s confirmaÃ§Ã£o:', error.message);
       await interaction.update({
-        content: `❌ Não consegui mover <@${member.id}> para <#${AFK_VOICE_CHANNEL_ID}>. Verifique a permissão **Mover Membros**.`,
+        content: `âŒ NÃ£o consegui mover <@${member.id}> para <#${AFK_VOICE_CHANNEL_ID}>. Verifique a permissÃ£o **Mover Membros**.`,
         components: []
       }).catch(() => {});
     }
@@ -1495,7 +1495,7 @@ async function handleAfkMoveConfirmation(interaction) {
   }
 
   await interaction.update({
-    content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e escolheu permanecer na call atual. Não pode ser perturbado.`,
+    content: `<a:luacancun2:1554021665934155796> VocÃª entrou no mundo AFK e escolheu permanecer na call atual. NÃ£o pode ser perturbado.`,
     components: []
   }).catch(() => {});
   return true;
@@ -1547,7 +1547,7 @@ function loadRankCallStreaks() {
     const data = JSON.parse(fs.readFileSync(RANK_CALL_STREAKS_FILE, 'utf8'));
     for (const [key, raw] of Object.entries(data || {})) rankCallStreaks.set(key, normalizeRankCallStreakData(raw));
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar sequências:', e.message);
+    console.warn('[RankCall] Erro ao carregar sequÃªncias:', e.message);
   }
 }
 
@@ -1555,7 +1555,7 @@ function saveRankCallStreaks() {
   try {
     fs.writeFileSync(RANK_CALL_STREAKS_FILE, JSON.stringify(Object.fromEntries(rankCallStreaks), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar sequências:', e.message);
+    console.warn('[RankCall] Erro ao salvar sequÃªncias:', e.message);
   }
 }
 
@@ -1650,8 +1650,8 @@ function addRankCallDailySeconds(guildId, userId, dateKey, seconds) {
   if (before < RANK_CALL_STREAK_MIN_SECONDS && after >= RANK_CALL_STREAK_MIN_SECONDS) {
     qualified = addRankCallQualifiedDate(record, dateKey);
   }
-  // O progresso diário também é persistido antes dos 30 minutos,
-  // para que um reinício não apague o que já foi feito naquele dia.
+  // O progresso diÃ¡rio tambÃ©m Ã© persistido antes dos 30 minutos,
+  // para que um reinÃ­cio nÃ£o apague o que jÃ¡ foi feito naquele dia.
   return qualified || after !== before;
 }
 
@@ -1677,9 +1677,9 @@ async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak
     const user = await client.users.fetch(userId);
     const guild = client.guilds.cache.get(guildId);
     const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
-    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequência do RankCall foi perdida.**\n\nVocê tinha uma sequência de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequência.`);
+    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequÃªncia do RankCall foi perdida.**\n\nVocÃª tinha uma sequÃªncia de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, vocÃª nÃ£o completou os **30 minutos mÃ­nimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para comeÃ§ar uma nova sequÃªncia.`);
   } catch (error) {
-    console.warn('[RankCall] Não foi possível enviar DM de sequência:', error.message);
+    console.warn('[RankCall] NÃ£o foi possÃ­vel enviar DM de sequÃªncia:', error.message);
   }
 }
 
@@ -1698,8 +1698,8 @@ async function evaluateRankCallStreaks(now = Date.now()) {
       record.dates.includes(yesterday) ||
       Number(record.dailySeconds?.[yesterday] || 0) >= RANK_CALL_STREAK_MIN_SECONDS;
 
-    // Se ontem não foi cumprido, a sequência atual é quebrada.
-    // Isso não impede que uma nova sequência seja iniciada hoje após 30 min.
+    // Se ontem nÃ£o foi cumprido, a sequÃªncia atual Ã© quebrada.
+    // Isso nÃ£o impede que uma nova sequÃªncia seja iniciada hoje apÃ³s 30 min.
     if (Number(record.currentStreak) > 0 && !yesterdayQualified && record.missedDayNotified !== yesterday) {
       const oldStreak = Number(record.currentStreak) || 0;
       record.currentStreak = 0;
@@ -1709,8 +1709,8 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     }
 
     // Ao atingir 30 min hoje, a data de hoje precisa estar qualificada.
-    // Mesmo que ela já esteja em `dates`, recalculamos o currentStreak;
-    // isso corrige o caso em que a sequência foi zerada no início do dia.
+    // Mesmo que ela jÃ¡ esteja em `dates`, recalculamos o currentStreak;
+    // isso corrige o caso em que a sequÃªncia foi zerada no inÃ­cio do dia.
     if (todayQualified) {
       if (!record.dates.includes(today)) {
         if (addRankCallQualifiedDate(record, today)) changed = true;
@@ -1744,19 +1744,19 @@ function getLiveRankCallStreakRanking(guild) {
     const [guildId, userId] = key.split(':');
     if (guildId !== guild.id) continue;
 
-    // A sequência só fica ATIVA no painel depois que a pessoa
+    // A sequÃªncia sÃ³ fica ATIVA no painel depois que a pessoa
     // completar 30 minutos acumulados de call no dia atual.
     const todaySeconds = Number(streak?.dailySeconds?.[today] || 0);
     const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
 
     // Repara automaticamente o painel caso o checkpoint tenha atualizado
-    // dailySeconds mas a inclusão da data qualificada ainda não tenha ocorrido.
+    // dailySeconds mas a inclusÃ£o da data qualificada ainda nÃ£o tenha ocorrido.
     if (todayQualified && !streak.dates.includes(today)) {
       addRankCallQualifiedDate(streak, today);
       changed = true;
     }
 
-    // Mantém a sequência corrente coerente com as datas históricas.
+    // MantÃ©m a sequÃªncia corrente coerente com as datas histÃ³ricas.
     const recalculated = calculateRankCallCurrentStreak(streak.dates);
     if (Number(streak.currentStreak) !== Number(recalculated.currentStreak)) {
       streak.currentStreak = recalculated.currentStreak;
@@ -1766,9 +1766,9 @@ function getLiveRankCallStreakRanking(guild) {
 
     const currentStreak = Number(streak.currentStreak) || 0;
 
-    // Não exibe a sequência como ativa antes dos 30 minutos do dia.
-    // O histórico continua salvo normalmente; ao completar 30 min,
-    // a data de hoje é adicionada e a sequência volta a aparecer.
+    // NÃ£o exibe a sequÃªncia como ativa antes dos 30 minutos do dia.
+    // O histÃ³rico continua salvo normalmente; ao completar 30 min,
+    // a data de hoje Ã© adicionada e a sequÃªncia volta a aparecer.
     if (todayQualified && currentStreak > 0) {
       rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
     }
@@ -1914,7 +1914,7 @@ const PERMISSIONS = [
 ];
 
 
-// Permissões locais: funcionam mesmo sem DATABASE_URL.
+// PermissÃµes locais: funcionam mesmo sem DATABASE_URL.
 const LOCAL_PERMISSIONS_FILE =
   path.join(__dirname, 'permissions-local.json');
 
@@ -1937,7 +1937,7 @@ function loadLocalPermissions() {
         : {};
   } catch (e) {
     console.warn(
-      '[Permissões] Erro ao carregar permissões locais:',
+      '[PermissÃµes] Erro ao carregar permissÃµes locais:',
       e.message
     );
     localPermissions = {};
@@ -1954,7 +1954,7 @@ function saveLocalPermissions() {
     return true;
   } catch (e) {
     console.error(
-      '[Permissões] Erro ao salvar permissões locais:',
+      '[PermissÃµes] Erro ao salvar permissÃµes locais:',
       e.message
     );
     return false;
@@ -2142,7 +2142,7 @@ async function initDB() {
 
     console.warn(
 
-      '[DB] DATABASE_URL não configurada. Recursos de banco ficam em modo local/in-memory.'
+      '[DB] DATABASE_URL nÃ£o configurada. Recursos de banco ficam em modo local/in-memory.'
 
     );
 
@@ -2960,7 +2960,7 @@ async function askAI(
 
     throw new Error(
 
-      'OPENAI_API_KEY não configurada.'
+      'OPENAI_API_KEY nÃ£o configurada.'
 
     );
 
@@ -3014,7 +3014,7 @@ async function askAI(
 
               content:
 
-                `Responda em português brasileiro, de forma clara, objetiva e educada. ${systemExtra}`
+                `Responda em portuguÃªs brasileiro, de forma clara, objetiva e educada. ${systemExtra}`
 
             },
 
@@ -3114,7 +3114,7 @@ async function askAIWithRules(
 
           .join('\n')}`
 
-      : 'Não há regras cadastradas no banco.';
+      : 'NÃ£o hÃ¡ regras cadastradas no banco.';
 
 
 
@@ -3122,7 +3122,7 @@ async function askAIWithRules(
 
     prompt,
 
-    `Quando a pergunta for sobre regras do servidor, use somente as regras fornecidas abaixo. Não invente regras.\n${context}`
+    `Quando a pergunta for sobre regras do servidor, use somente as regras fornecidas abaixo. NÃ£o invente regras.\n${context}`
 
   );
 
@@ -3804,12 +3804,12 @@ function buildRankCallRow(guild, row, index) {
   const { channel, isCallPriv, ownerId } = getRankCallVoiceInfo(guild, row.userId);
   const userMention = `<@${row.userId}>`;
   const callLabel = channel
-    ? `${isCallPriv ? '🛠️ ' : ''}<#${channel.id}>${ownerId === row.userId ? ' • 👑 Dono' : ''}`
-    : '🔇 Fora de call';
+    ? `${isCallPriv ? 'ðŸ› ï¸ ' : ''}<#${channel.id}>${ownerId === row.userId ? ' â€¢ ðŸ‘‘ Dono' : ''}`
+    : 'ðŸ”‡ Fora de call';
 
   return [
     `**${index + 1}.** ${userMention}`,
-    `╰ ⏱️ **${formatVoiceDuration(row.seconds)}** • 🔊 ${callLabel}`
+    `â•° â±ï¸ **${formatVoiceDuration(row.seconds)}** â€¢ ðŸ”Š ${callLabel}`
   ].join('\n');
 }
 
@@ -3822,13 +3822,13 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
 
   const description = rows.length
     ? rows.map((row, index) => buildRankCallRow(guild, row, start + index)).join('\n\n')
-    : '📊 Nenhum usuário possui horas registradas em call.';
+    : 'ðŸ“Š Nenhum usuÃ¡rio possui horas registradas em call.';
 
   const embed = createEmbed({
     title: String(rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title).slice(0, 256),
     description: [String(rankCallConfig.description || '').trim(), description].filter(Boolean).join('\n\n'),
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `Ranking de horas • Página ${safePage + 1}/${totalPages} • Atualiza a cada 5 segundos • ${guild.name}`
+    footer: `Ranking de horas â€¢ PÃ¡gina ${safePage + 1}/${totalPages} â€¢ Atualiza a cada 5 segundos â€¢ ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
@@ -3847,15 +3847,15 @@ function buildRankCallStreakEmbed(guild, page = 0) {
 
   const description = rows.length
     ? rows.map((row, index) =>
-        `**${start + index + 1}.** <@${row.userId}> — ${RANK_CALL_STREAK_EMOJI} **Sequência: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**`
+        `**${start + index + 1}.** <@${row.userId}> â€” ${RANK_CALL_STREAK_EMOJI} **SequÃªncia: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**`
       ).join('\n')
-    : `${RANK_CALL_STREAK_EMOJI} Nenhum usuário possui uma sequência ativa no momento.`;
+    : `${RANK_CALL_STREAK_EMOJI} Nenhum usuÃ¡rio possui uma sequÃªncia ativa no momento.`;
 
   const embed = createEmbed({
-    title: `${RANK_CALL_STREAK_EMOJI} Sequência de dias em Call`,
+    title: `${RANK_CALL_STREAK_EMOJI} SequÃªncia de dias em Call`,
     description,
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `30 minutos acumulados em call por dia • Dias históricos salvos • Página ${safePage + 1}/${totalPages} • ${guild.name}`
+    footer: `30 minutos acumulados em call por dia â€¢ Dias histÃ³ricos salvos â€¢ PÃ¡gina ${safePage + 1}/${totalPages} â€¢ ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
@@ -3923,6 +3923,8 @@ async function updateLiveRankPanel(
 
 
 
+let rankCallPanelMessage = null;
+
 async function findExistingRankCallPanel(channel) {
   try {
     const messages = await channel.messages.fetch({ limit: 100 });
@@ -3948,16 +3950,20 @@ async function findExistingRankCallPanel(channel) {
       })
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
+    console.log(
+      `[RankCall] Painéis encontrados no canal: ${candidates.length} | IDs: ${candidates.map(m => m.id).join(', ')}`
+    );
+
     const panel = candidates[0] || null;
 
-    // Se existirem v�rios pain�is antigos, mant�m somente o mais recente.
+    // Se existirem vários painéis antigos, mantém somente o mais recente.
     for (const duplicate of candidates.slice(1)) {
       try {
         await duplicate.delete();
         console.log(`[RankCall] Painel duplicado removido: ${duplicate.id}`);
       } catch (error) {
         console.error(
-          `[RankCall] N�o foi poss�vel remover painel duplicado ${duplicate.id}:`,
+          `[RankCall] Não foi possível remover painel duplicado ${duplicate.id}:`,
           error?.message || error
         );
       }
@@ -3966,7 +3972,7 @@ async function findExistingRankCallPanel(channel) {
     return panel;
   } catch (error) {
     console.warn(
-      '[RankCall] N�o foi poss�vel procurar painel existente:',
+      '[RankCall] Não foi possível procurar painel existente:',
       error.message
     );
     return null;
@@ -3985,13 +3991,13 @@ async function publishRankCallPanel(
 
   if (!channel || !channel.isTextBased()) {
     throw new Error(
-      `Canal RankCall ${RANK_CALL_CHANNEL_ID} n�o encontrado ou n�o � de texto.`
+      `Canal RankCall ${RANK_CALL_CHANNEL_ID} não encontrado ou não é de texto.`
     );
   }
 
-  // N�O usa nem salva ID de mensagem.
-  // O painel � localizado pelo conte�do do pr�prio painel.
-  let panel = await findExistingRankCallPanel(channel);
+  // Usa somente a referência em memória.
+  // Nenhum messageId é salvo no arquivo.
+  let panel = rankCallPanelMessage;
 
   if (recreate && panel) {
     try {
@@ -3999,12 +4005,19 @@ async function publishRankCallPanel(
       console.log(`[RankCall] Painel anterior removido: ${panel.id}`);
     } catch (error) {
       console.error(
-        '[RankCall] N�o foi poss�vel remover o painel anterior:',
+        '[RankCall] Não foi possível remover o painel anterior:',
         error?.message || error
       );
     }
 
+    rankCallPanelMessage = null;
     panel = null;
+  }
+
+  // Só procura um painel existente quando ainda não temos
+  // um painel guardado em memória.
+  if (!panel) {
+    panel = await findExistingRankCallPanel(channel);
   }
 
   const ranking = await getLiveVoiceRanking(guild);
@@ -4040,12 +4053,12 @@ async function publishRankCallPanel(
       new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`rankstreak_prev_${streakView.safePage}`)
-          .setLabel('? Sequ�ncias')
+          .setLabel('? Sequências')
           .setStyle(ButtonStyle.Success)
           .setDisabled(streakView.safePage <= 0),
         new ButtonBuilder()
           .setCustomId(`rankstreak_next_${streakView.safePage}`)
-          .setLabel('Sequ�ncias ?')
+          .setLabel('Sequências ?')
           .setStyle(ButtonStyle.Success)
           .setDisabled(
             streakView.safePage >= streakView.totalPages - 1
@@ -4071,15 +4084,30 @@ async function publishRankCallPanel(
   };
 
   if (panel) {
-    await panel.edit(payload);
+    try {
+      await panel.edit(payload);
+    } catch (error) {
+      // A mensagem pode ter sido apagada manualmente.
+      // Limpa somente a referência em memória e recria uma vez.
+      if (error?.code === 10008) {
+        console.warn('[RankCall] Painel não existe mais. Criando um novo painel.');
+
+        rankCallPanelMessage = null;
+        panel = await channel.send(payload);
+
+        console.log(`[RankCall] Novo painel criado: ${panel.id}`);
+      } else {
+        throw error;
+      }
+    }
   } else {
     panel = await channel.send(payload);
     console.log(`[RankCall] Novo painel criado: ${panel.id}`);
   }
 
-  // IMPORTANTE:
-  // N�o salvar messageId.
-  // O painel ser� reencontrado pelo conte�do na pr�xima atualiza��o.
+  // Guarda somente em memória durante esta execução.
+  // Nenhum messageId é salvo no arquivo.
+  rankCallPanelMessage = panel;
   liveRankPanels.set(panel.id, {
     guildId: guild.id,
     channelId: channel.id
@@ -4089,38 +4117,38 @@ async function publishRankCallPanel(
 }
 function buildRankCallConfigEmbed() {
   return createEmbed({
-    title: '⚙️ Configuração do RankCall',
-    description: 'Use os botões abaixo para personalizar o painel de ranking. O ranking não possui limite de usuários; quando necessário, usa páginas de 10 pessoas.',
+    title: 'âš™ï¸ ConfiguraÃ§Ã£o do RankCall',
+    description: 'Use os botÃµes abaixo para personalizar o painel de ranking. O ranking nÃ£o possui limite de usuÃ¡rios; quando necessÃ¡rio, usa pÃ¡ginas de 10 pessoas.',
     color: normalizeHexColor(rankCallConfig.color),
     fields: [
-      { name: 'Título', value: String(rankCallConfig.title || '—').slice(0, 1024) },
-      { name: 'Descrição', value: String(rankCallConfig.description || '—').slice(0, 1024) },
-      { name: 'Cor', value: String(rankCallConfig.color || '—'), inline: true },
-      { name: 'Ícone', value: rankCallConfig.icon ? 'Configurado' : 'Não configurado', inline: true },
-      { name: 'Banner', value: rankCallConfig.banner ? 'Configurado' : 'Não configurado', inline: true }
+      { name: 'TÃ­tulo', value: String(rankCallConfig.title || 'â€”').slice(0, 1024) },
+      { name: 'DescriÃ§Ã£o', value: String(rankCallConfig.description || 'â€”').slice(0, 1024) },
+      { name: 'Cor', value: String(rankCallConfig.color || 'â€”'), inline: true },
+      { name: 'Ãcone', value: rankCallConfig.icon ? 'Configurado' : 'NÃ£o configurado', inline: true },
+      { name: 'Banner', value: rankCallConfig.banner ? 'Configurado' : 'NÃ£o configurado', inline: true }
     ],
-    footer: 'RankCall • somente administradores'
+    footer: 'RankCall â€¢ somente administradores'
   });
 }
 
 function buildRankCallConfigComponents() {
   return [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rankconfig_title').setLabel('Título').setEmoji('✏️').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('rankconfig_description').setLabel('Descrição').setEmoji('📝').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('rankconfig_color').setLabel('Cor').setEmoji('🎨').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('rankconfig_title').setLabel('TÃ­tulo').setEmoji('âœï¸').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('rankconfig_description').setLabel('DescriÃ§Ã£o').setEmoji('ðŸ“').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('rankconfig_color').setLabel('Cor').setEmoji('ðŸŽ¨').setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rankconfig_icon').setLabel('Ícone').setEmoji('🖼️').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rankconfig_banner').setLabel('Banner').setEmoji('🌄').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rankconfig_reset').setLabel('Restaurar').setEmoji('♻️').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('rankconfig_icon').setLabel('Ãcone').setEmoji('ðŸ–¼ï¸').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rankconfig_banner').setLabel('Banner').setEmoji('ðŸŒ„').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rankconfig_reset').setLabel('Restaurar').setEmoji('â™»ï¸').setStyle(ButtonStyle.Danger)
     )
   ];
 }
 
 async function sendRankCallConfigPanel(guild) {
   const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
-  if (!channel?.isTextBased()) throw new Error('Canal do RankCall não encontrado.');
+  if (!channel?.isTextBased()) throw new Error('Canal do RankCall nÃ£o encontrado.');
   const message = await channel.send({
     embeds: [buildRankCallConfigEmbed()],
     components: buildRankCallConfigComponents()
@@ -4130,14 +4158,14 @@ async function sendRankCallConfigPanel(guild) {
 
 function openRankCallConfigModal(interaction, option) {
   const labels = {
-    title: 'Título do painel',
-    description: 'Descrição do painel',
+    title: 'TÃ­tulo do painel',
+    description: 'DescriÃ§Ã£o do painel',
     color: 'Cor HEX (#RRGGBB)',
-    icon: 'URL do ícone',
+    icon: 'URL do Ã­cone',
     banner: 'URL do banner'
   };
   const placeholders = {
-    title: '🏆 Ranking de Horas em Call',
+    title: 'ðŸ† Ranking de Horas em Call',
     description: 'Acompanhe em tempo real quem mais permanece em call.',
     color: '#FEE75C',
     icon: 'https://...',
@@ -4150,7 +4178,7 @@ function openRankCallConfigModal(interaction, option) {
     icon: String(rankCallConfig.icon || ''),
     banner: String(rankCallConfig.banner || '')
   };
-  const modal = new ModalBuilder().setCustomId(`rankconfig_modal:${option}`).setTitle(`⚙️ ${labels[option]}`);
+  const modal = new ModalBuilder().setCustomId(`rankconfig_modal:${option}`).setTitle(`âš™ï¸ ${labels[option]}`);
   const input = new TextInputBuilder()
     .setCustomId('value')
     .setLabel(labels[option])
@@ -4165,29 +4193,29 @@ function openRankCallConfigModal(interaction, option) {
 
 async function handleRankCallConfigModal(interaction) {
   if (!isTempVoicePanelAdmin(interaction.member)) {
-    return interaction.reply({ content: '❌ Você não possui permissão para configurar o RankCall.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'âŒ VocÃª nÃ£o possui permissÃ£o para configurar o RankCall.', flags: MessageFlags.Ephemeral });
   }
 
   const option = interaction.customId.split(':')[1];
   const value = String(interaction.fields.getTextInputValue('value') || '').trim();
 
   if (option === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) {
-    return interaction.reply({ content: '❌ A cor deve estar no formato #RRGGBB.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'âŒ A cor deve estar no formato #RRGGBB.', flags: MessageFlags.Ephemeral });
   }
   if ((option === 'icon' || option === 'banner') && value && !/^https?:\/\//i.test(value)) {
-    return interaction.reply({ content: '❌ Informe uma URL começando com http:// ou https://.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'âŒ Informe uma URL comeÃ§ando com http:// ou https://.', flags: MessageFlags.Ephemeral });
   }
 
   rankCallConfig[option] = option === 'color' ? (value || DEFAULT_RANK_CALL_CONFIG.color) : value;
   saveRankCallConfig();
   saveRankCallBackup(`config-${option}`);
-  await interaction.reply({ content: `✅ ${option === 'title' ? 'Título' : option === 'description' ? 'Descrição' : option === 'color' ? 'Cor' : option === 'icon' ? 'Ícone' : 'Banner'} atualizado.`, flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: `âœ… ${option === 'title' ? 'TÃ­tulo' : option === 'description' ? 'DescriÃ§Ã£o' : option === 'color' ? 'Cor' : option === 'icon' ? 'Ãcone' : 'Banner'} atualizado.`, flags: MessageFlags.Ephemeral });
   await refreshRankCallPanel();
 }
 
 async function handleRankCallConfigButton(interaction) {
   if (!isTempVoicePanelAdmin(interaction.member)) {
-    await interaction.reply({ content: '❌ Você não possui permissão para configurar o RankCall.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    await interaction.reply({ content: 'âŒ VocÃª nÃ£o possui permissÃ£o para configurar o RankCall.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return true;
   }
 
@@ -4218,8 +4246,8 @@ async function refreshRankCallPanel() {
   rankCallRefreshInProgress = true;
 
   try {
-    // Primeiro sincroniza quem está realmente em voz e transforma o tempo
-    // acumulado desde o último checkpoint em horas persistentes.
+    // Primeiro sincroniza quem estÃ¡ realmente em voz e transforma o tempo
+    // acumulado desde o Ãºltimo checkpoint em horas persistentes.
     syncRankCallVoiceSessionsFromVoiceStates();
     checkpointLocalVoiceSessions();
     await syncRankCallStreaksFromVoiceStates();
@@ -4227,19 +4255,19 @@ async function refreshRankCallPanel() {
     const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
     if (!channel?.isTextBased() || !channel.guild) return;
 
-    // O painel é persistente, mas a mensagem pode ter sido apagada manualmente.
-    // Nesse caso o bot recria automaticamente uma única mensagem e grava o novo ID.
+    // O painel Ã© persistente, mas a mensagem pode ter sido apagada manualmente.
+    // Nesse caso o bot recria automaticamente uma Ãºnica mensagem e grava o novo ID.
     await publishRankCallPanel(channel.guild, {
       page: rankCallConfig.page || 0,
       streakPage: rankCallConfig.streakPage || 0
     });
 
-    // Log leve para confirmar no console que o relógio do RankCall continua
+    // Log leve para confirmar no console que o relÃ³gio do RankCall continua
     // sendo processado, sem inundar o terminal.
     const active = [...voiceSessions.values()].length;
-    console.log(`[RankCall] Heartbeat OK • ${active} sessão(ões) ativas • ${new Date().toLocaleTimeString('pt-BR')}`);
+    console.log(`[RankCall] Heartbeat OK â€¢ ${active} sessÃ£o(Ãµes) ativas â€¢ ${new Date().toLocaleTimeString('pt-BR')}`);
   } catch (error) {
-    console.error('[RankCall] Atualização automática:', error.message);
+    console.error('[RankCall] AtualizaÃ§Ã£o automÃ¡tica:', error.message);
   } finally {
     rankCallRefreshInProgress = false;
   }
@@ -4254,7 +4282,7 @@ function startRankCallAutoRefresh() {
     void refreshRankCallPanel();
   }, 5000);
 
-  console.log('[RankCall] Atualização automática a cada 5 segundos ativada.');
+  console.log('[RankCall] AtualizaÃ§Ã£o automÃ¡tica a cada 5 segundos ativada.');
 }
 
 async function handleRankCallPrefixCommand(message) {
@@ -4274,7 +4302,7 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     if (!isTempVoicePanelAdmin(message.member)) {
-      await message.channel.send('❌ Você não possui permissão para administrar o RankCall.').catch(() => {});
+      await message.channel.send('âŒ VocÃª nÃ£o possui permissÃ£o para administrar o RankCall.').catch(() => {});
       return true;
     }
 
@@ -4301,13 +4329,13 @@ async function handleRankCallPrefixCommand(message) {
       saveVoiceSessionsLocal();
       saveRankCallBackup('rankresetall');
       await refreshRankCallPanel();
-      await message.channel.send('✅ Todas as horas de call deste servidor foram zeradas. As sequências de dias continuam salvas.').catch(() => {});
+      await message.channel.send('âœ… Todas as horas de call deste servidor foram zeradas. As sequÃªncias de dias continuam salvas.').catch(() => {});
       return true;
     }
 
     const target = message.mentions.users.first();
     if (!target) {
-      await message.channel.send(`❌ Use !${command} @usuario${command === 'rankreset' ? '' : ' horas'}`).catch(() => {});
+      await message.channel.send(`âŒ Use !${command} @usuario${command === 'rankreset' ? '' : ' horas'}`).catch(() => {});
       return true;
     }
 
@@ -4317,7 +4345,7 @@ async function handleRankCallPrefixCommand(message) {
     const hours = Number.parseFloat(String(rawHours || '0').replace(',', '.'));
 
     if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0)) {
-      await message.channel.send('❌ Informe uma quantidade de horas válida.').catch(() => {});
+      await message.channel.send('âŒ Informe uma quantidade de horas vÃ¡lida.').catch(() => {});
       return true;
     }
 
@@ -4336,11 +4364,11 @@ async function handleRankCallPrefixCommand(message) {
     saveVoiceHoursLocal();
     saveRankCallBackup(command);
     await refreshRankCallPanel();
-    await message.channel.send(`✅ Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
+    await message.channel.send(`âœ… Horas de <@${target.id}> atualizadas no RankCall. As sequÃªncias de dias permanecem salvas.`).catch(() => {});
     return true;
   } catch (error) {
     console.error('[RankCall]', error);
-    await message.channel.send(`❌ Erro no RankCall: ${error.message}`).catch(() => {});
+    await message.channel.send(`âŒ Erro no RankCall: ${error.message}`).catch(() => {});
     return true;
   }
 }
@@ -4669,7 +4697,7 @@ async function buildDashboardEmbed(
 
                   : `Canal ${item.channel_id}`
 
-              } — ${
+              } â€” ${
 
                 item.message_count
 
@@ -4689,11 +4717,11 @@ async function buildDashboardEmbed(
 
     title:
 
-      '📊 Painel de Estatísticas',
+      'ðŸ“Š Painel de EstatÃ­sticas',
 
     description:
 
-      'Estatísticas atualizadas do servidor.',
+      'EstatÃ­sticas atualizadas do servidor.',
 
     color: '#5865F2',
 
@@ -4703,11 +4731,11 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '🤖 BOT',
+        name: 'ðŸ¤– BOT',
 
         value:
 
-          '🟢 ONLINE',
+          'ðŸŸ¢ ONLINE',
 
         inline: true
 
@@ -4717,7 +4745,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '👥 Membros',
+        name: 'ðŸ‘¥ Membros',
 
         value:
 
@@ -4735,7 +4763,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '🟢 Online',
+        name: 'ðŸŸ¢ Online',
 
         value:
 
@@ -4753,7 +4781,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '🎫 Tickets',
+        name: 'ðŸŽ« Tickets',
 
         value:
 
@@ -4771,7 +4799,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '💘 Matches',
+        name: 'ðŸ’˜ Matches',
 
         value:
 
@@ -4789,7 +4817,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '🔊 Em call',
+        name: 'ðŸ”Š Em call',
 
         value:
 
@@ -4807,7 +4835,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '💬 Mensagens',
+        name: 'ðŸ’¬ Mensagens',
 
         value:
 
@@ -4827,7 +4855,7 @@ async function buildDashboardEmbed(
 
         name:
 
-          '📈 Canais mais utilizados',
+          'ðŸ“ˆ Canais mais utilizados',
 
         value:
 
@@ -4841,7 +4869,7 @@ async function buildDashboardEmbed(
 
     footer:
 
-      'Atualização em tempo real'
+      'AtualizaÃ§Ã£o em tempo real'
 
   });
 
@@ -5283,7 +5311,7 @@ async function verifyMember(
 
       reason:
 
-        'Nenhum código de verificação encontrado.'
+        'Nenhum cÃ³digo de verificaÃ§Ã£o encontrado.'
 
     };
 
@@ -5317,7 +5345,7 @@ async function verifyMember(
 
       reason:
 
-        'O código expirou. Gere outro código.'
+        'O cÃ³digo expirou. Gere outro cÃ³digo.'
 
     };
 
@@ -5347,7 +5375,7 @@ async function verifyMember(
 
       reason:
 
-        'Código incorreto.'
+        'CÃ³digo incorreto.'
 
     };
 
@@ -5523,7 +5551,7 @@ async function verifyMember(
 
         content:
 
-          `⚠️ ${message.author}, sua mensagem foi removida por conter uma palavra bloqueada.`
+          `âš ï¸ ${message.author}, sua mensagem foi removida por conter uma palavra bloqueada.`
 
       })
 
@@ -5553,7 +5581,7 @@ async function verifyMember(
 
       content:
 
-        `⚠️ Sua mensagem no servidor **${message.guild.name}** foi removida porque contém uma palavra que está na lista de bloqueio.`
+        `âš ï¸ Sua mensagem no servidor **${message.guild.name}** foi removida porque contÃ©m uma palavra que estÃ¡ na lista de bloqueio.`
 
     });
 
@@ -5565,7 +5593,7 @@ async function verifyMember(
 
     message.guild,
 
-    `🚫 **Palavra bloqueada**\nUsuário: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
+    `ðŸš« **Palavra bloqueada**\nUsuÃ¡rio: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
 
   );
 
@@ -5663,7 +5691,7 @@ async function detectAttention(
 
       await askAI(
 
-        `Analise esta mensagem de Discord e determine se ela parece exigir atenção da equipe de staff.
+        `Analise esta mensagem de Discord e determine se ela parece exigir atenÃ§Ã£o da equipe de staff.
 
 
 
@@ -5687,9 +5715,9 @@ Responda SOMENTE neste formato JSON:
 
 
 
-Não considere simplesmente críticas, opiniões ou discussões normais como motivo para intervenção.`,
+NÃ£o considere simplesmente crÃ­ticas, opiniÃµes ou discussÃµes normais como motivo para intervenÃ§Ã£o.`,
 
-        'Você é um detector de mensagens que podem precisar de atenção humana. Você não pune ninguém e não deve inventar contexto.'
+        'VocÃª Ã© um detector de mensagens que podem precisar de atenÃ§Ã£o humana. VocÃª nÃ£o pune ninguÃ©m e nÃ£o deve inventar contexto.'
 
       );
 
@@ -5737,7 +5765,7 @@ Não considere simplesmente críticas, opiniões ou discussões normais como mot
 
       message.guild,
 
-      `🚨 **Atenção da IA**\nUsuário: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma possível necessidade de atenção.'}\n\n> ${content.slice(0, 1000)}`
+      `ðŸš¨ **AtenÃ§Ã£o da IA**\nUsuÃ¡rio: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma possÃ­vel necessidade de atenÃ§Ã£o.'}\n\n> ${content.slice(0, 1000)}`
 
     );
 
@@ -5917,7 +5945,7 @@ async function handleSpam(
 
         60 * 1000,
 
-        'Anti-spam automático'
+        'Anti-spam automÃ¡tico'
 
       );
 
@@ -5933,7 +5961,7 @@ async function handleSpam(
 
         'timeout',
 
-        'Anti-spam automático'
+        'Anti-spam automÃ¡tico'
 
       );
 
@@ -5943,7 +5971,7 @@ async function handleSpam(
 
         message.guild,
 
-        `🛡️ **Anti-spam**\n${message.author} recebeu timeout de 1 minuto.`
+        `ðŸ›¡ï¸ **Anti-spam**\n${message.author} recebeu timeout de 1 minuto.`
 
       );
 
@@ -5981,11 +6009,11 @@ async function sendVerificationPanel(
 
       title:
 
-        '✅ Verificação',
+        'âœ… VerificaÃ§Ã£o',
 
       description:
 
-        'Clique no botão abaixo para receber um código de verificação por DM.',
+        'Clique no botÃ£o abaixo para receber um cÃ³digo de verificaÃ§Ã£o por DM.',
 
       color: '#57F287'
 
@@ -6007,7 +6035,7 @@ async function sendVerificationPanel(
 
         .setLabel(
 
-          '🔐 Verificar'
+          'ðŸ” Verificar'
 
         )
 
@@ -6071,7 +6099,7 @@ async function sendVerificationCode(
 
       content:
 
-        `🔐 **Código de verificação**\n\nSeu código para o servidor **${interaction.guild.name}** é:\n\n**${result.code}**\n\nEste código expira em 10 minutos.`
+        `ðŸ” **CÃ³digo de verificaÃ§Ã£o**\n\nSeu cÃ³digo para o servidor **${interaction.guild.name}** Ã©:\n\n**${result.code}**\n\nEste cÃ³digo expira em 10 minutos.`
 
     });
 
@@ -6081,7 +6109,7 @@ async function sendVerificationCode(
 
       content:
 
-        '✅ O código foi enviado para sua DM. Clique em **Inserir código** para finalizar.',
+        'âœ… O cÃ³digo foi enviado para sua DM. Clique em **Inserir cÃ³digo** para finalizar.',
 
       ephemeral: true,
 
@@ -6101,7 +6129,7 @@ async function sendVerificationCode(
 
               .setLabel(
 
-                '🔢 Inserir código'
+                'ðŸ”¢ Inserir cÃ³digo'
 
               )
 
@@ -6123,7 +6151,7 @@ async function sendVerificationCode(
 
       content:
 
-        '❌ Não consegui enviar DM. Ative as mensagens diretas para membros do servidor e tente novamente.',
+        'âŒ NÃ£o consegui enviar DM. Ative as mensagens diretas para membros do servidor e tente novamente.',
 
       ephemeral: true
 
@@ -6153,7 +6181,7 @@ async function showVerificationModal(
 
       .setTitle(
 
-        'Código de verificação'
+        'CÃ³digo de verificaÃ§Ã£o'
 
       );
 
@@ -6171,7 +6199,7 @@ async function showVerificationModal(
 
       .setLabel(
 
-        'Digite o código recebido'
+        'Digite o cÃ³digo recebido'
 
       )
 
@@ -6253,7 +6281,7 @@ async function handleVerificationModal(
 
       content:
 
-        `❌ ${result.reason}`,
+        `âŒ ${result.reason}`,
 
       ephemeral: true
 
@@ -6271,7 +6299,7 @@ async function handleVerificationModal(
 
     content:
 
-      '✅ Verificação concluída com sucesso!',
+      'âœ… VerificaÃ§Ã£o concluÃ­da com sucesso!',
 
     ephemeral: true
 
@@ -6283,7 +6311,7 @@ async function handleVerificationModal(
 
     interaction.guild,
 
-    `✅ ${interaction.user} concluiu a verificação.`
+    `âœ… ${interaction.user} concluiu a verificaÃ§Ã£o.`
 
   );
 
@@ -6376,7 +6404,7 @@ async function createTempVoiceRoom(
 
       name:
 
-        String(tempVoiceConfig.defaultName || '🔊・{user}')
+        String(tempVoiceConfig.defaultName || 'ðŸ”Šãƒ»{user}')
           .replace(/\{user\}/gi, member.user.username)
           .replace(/\{display\}/gi, member.displayName || member.user.username)
           .slice(0, 100),
@@ -6467,14 +6495,14 @@ async function createTempVoiceRoom(
 function detectTempVoiceOwner(channel) {
   if (!channel?.guild) return null;
 
-  // Primeiro tenta a informação persistida em temp-voice-rooms.json.
+  // Primeiro tenta a informaÃ§Ã£o persistida em temp-voice-rooms.json.
   const saved = tempRooms.get(channel.id);
   if (saved?.ownerId) {
     return saved.ownerId;
   }
 
   // Fallback para salas antigas: o dono recebe explicitamente
-  // ManageChannels + MoveMembers na criação.
+  // ManageChannels + MoveMembers na criaÃ§Ã£o.
   const ownerOverwrite =
     channel.permissionOverwrites?.cache?.find(overwrite => {
       if (overwrite.type !== 1) return false;
@@ -6611,7 +6639,7 @@ async function deleteTempRoom(
 
       .delete(
 
-        'Sala temporária vazia'
+        'Sala temporÃ¡ria vazia'
 
       )
 
@@ -6876,7 +6904,7 @@ function syncRankCallVoiceSessionsFromVoiceStates() {
 
       const key = `${guild.id}:${userId}`;
       if (!voiceSessions.has(key)) {
-        // Recupera sessões que já estavam em call quando o bot terminou de conectar
+        // Recupera sessÃµes que jÃ¡ estavam em call quando o bot terminou de conectar
         // ou quando um VoiceStateUpdate foi perdido temporariamente.
         voiceSessions.set(key, Date.now());
         changed = true;
@@ -7142,7 +7170,7 @@ if (
 
     content:
 
-      `✅ Sua sala foi criada: ${channel}`,
+      `âœ… Sua sala foi criada: ${channel}`,
 
     ephemeral: true
 
@@ -7190,7 +7218,7 @@ async function renameTempRoom(
 
       content:
 
-        '❌ Você precisa estar em uma sala temporária.',
+        'âŒ VocÃª precisa estar em uma sala temporÃ¡ria.',
 
       ephemeral: true
 
@@ -7212,7 +7240,7 @@ async function renameTempRoom(
 
       content:
 
-        '❌ Esta não é uma sala temporária.',
+        'âŒ Esta nÃ£o Ã© uma sala temporÃ¡ria.',
 
       ephemeral: true
 
@@ -7234,7 +7262,7 @@ async function renameTempRoom(
 
       content:
 
-        '❌ Somente o dono da sala pode alterar o nome.',
+        'âŒ Somente o dono da sala pode alterar o nome.',
 
       ephemeral: true
 
@@ -7338,7 +7366,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        '❌ Sala não encontrada.',
+        'âŒ Sala nÃ£o encontrada.',
 
       ephemeral: true
 
@@ -7368,7 +7396,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        '❌ Você não é o dono desta sala.',
+        'âŒ VocÃª nÃ£o Ã© o dono desta sala.',
 
       ephemeral: true
 
@@ -7398,7 +7426,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        '❌ Informe um nome válido.',
+        'âŒ Informe um nome vÃ¡lido.',
 
       ephemeral: true
 
@@ -7420,7 +7448,7 @@ async function handleTempVoiceModal(
 
     content:
 
-      `✅ Nome alterado para **${name}**.`,
+      `âœ… Nome alterado para **${name}**.`,
 
     ephemeral: true
 
@@ -7452,7 +7480,7 @@ async function tempVoiceControl(
 
       content:
 
-        '❌ Você precisa estar em uma sala temporária.',
+        'âŒ VocÃª precisa estar em uma sala temporÃ¡ria.',
 
       ephemeral: true
 
@@ -7474,7 +7502,7 @@ async function tempVoiceControl(
 
       content:
 
-        '❌ Esta não é uma sala temporária.',
+        'âŒ Esta nÃ£o Ã© uma sala temporÃ¡ria.',
 
       ephemeral: true
 
@@ -7496,7 +7524,7 @@ async function tempVoiceControl(
 
       content:
 
-        '❌ Somente o dono da sala pode usar este controle.',
+        'âŒ Somente o dono da sala pode usar este controle.',
 
       ephemeral: true
 
@@ -7530,7 +7558,7 @@ async function tempVoiceControl(
 
           content:
 
-            '❌ O bot não tem permissão para alterar as permissões desta sala. Dê ao cargo do bot a permissão **Gerenciar canais** e verifique se a categoria não possui uma negação dessa permissão.',
+            'âŒ O bot nÃ£o tem permissÃ£o para alterar as permissÃµes desta sala. DÃª ao cargo do bot a permissÃ£o **Gerenciar canais** e verifique se a categoria nÃ£o possui uma negaÃ§Ã£o dessa permissÃ£o.',
 
           ephemeral: true
 
@@ -7546,7 +7574,7 @@ async function tempVoiceControl(
 
       content:
 
-        '🔒 Sala bloqueada.',
+        'ðŸ”’ Sala bloqueada.',
 
       ephemeral: true
 
@@ -7580,7 +7608,7 @@ async function tempVoiceControl(
 
           content:
 
-            '❌ O bot não tem permissão para alterar as permissões desta sala. Dê ao cargo do bot a permissão **Gerenciar canais** e verifique se a categoria não possui uma negação dessa permissão.',
+            'âŒ O bot nÃ£o tem permissÃ£o para alterar as permissÃµes desta sala. DÃª ao cargo do bot a permissÃ£o **Gerenciar canais** e verifique se a categoria nÃ£o possui uma negaÃ§Ã£o dessa permissÃ£o.',
 
           ephemeral: true
 
@@ -7596,7 +7624,7 @@ async function tempVoiceControl(
 
       content:
 
-        '🔓 Sala desbloqueada.',
+        'ðŸ”“ Sala desbloqueada.',
 
       ephemeral: true
 
@@ -7622,7 +7650,7 @@ async function tempVoiceControl(
 
       content:
 
-        '🗑️ Sala excluída.',
+        'ðŸ—‘ï¸ Sala excluÃ­da.',
 
       ephemeral: true
 
@@ -7646,7 +7674,7 @@ async function tempVoiceControl(
 
         .setTitle(
 
-          'Limite de usuários'
+          'Limite de usuÃ¡rios'
 
         );
 
@@ -7664,7 +7692,7 @@ async function tempVoiceControl(
 
         .setLabel(
 
-          'Quantidade de usuários'
+          'Quantidade de usuÃ¡rios'
 
         )
 
@@ -7756,7 +7784,7 @@ async function tempVoiceControl(
 
         content:
 
-          '❌ Não há outros usuários na sala.',
+          'âŒ NÃ£o hÃ¡ outros usuÃ¡rios na sala.',
 
         ephemeral: true
 
@@ -7794,7 +7822,7 @@ async function tempVoiceControl(
 
       content:
 
-        '👢 Escolha o usuário:',
+        'ðŸ‘¢ Escolha o usuÃ¡rio:',
 
       components: [
 
@@ -7858,7 +7886,7 @@ async function tempVoiceControl(
 
         content:
 
-          '❌ Não há outro usuário para receber a posse.',
+          'âŒ NÃ£o hÃ¡ outro usuÃ¡rio para receber a posse.',
 
         ephemeral: true
 
@@ -7896,7 +7924,7 @@ async function tempVoiceControl(
 
       content:
 
-        '👑 Escolha o novo dono:',
+        'ðŸ‘‘ Escolha o novo dono:',
 
       components: [
 
@@ -7972,7 +8000,7 @@ async function handleTempVoiceModalAction(
 
       content:
 
-        '❌ Você não é o dono desta sala ou ela não existe mais.',
+        'âŒ VocÃª nÃ£o Ã© o dono desta sala ou ela nÃ£o existe mais.',
 
 
     });
@@ -8023,7 +8051,7 @@ async function handleTempVoiceModalAction(
 
         content:
 
-          '❌ Informe um número entre 0 e 99.',
+          'âŒ Informe um nÃºmero entre 0 e 99.',
 
   
       });
@@ -8031,10 +8059,10 @@ async function handleTempVoiceModalAction(
     }
     try {
       await channel.setUserLimit(value);
-      return interaction.editReply({ content: `✅ Limite definido para **${value === 0 ? 'sem limite' : value}**.` });
+      return interaction.editReply({ content: `âœ… Limite definido para **${value === 0 ? 'sem limite' : value}**.` });
     } catch (error) {
       console.error('[TempVoice] Erro ao alterar limite:', error);
-      return interaction.editReply({ content: error?.code === 50013 ? '❌ O bot não tem permissão para alterar o limite desta sala. Verifique **Gerenciar canais**.' : '❌ Não foi possível alterar o limite da sala.' });
+      return interaction.editReply({ content: error?.code === 50013 ? 'âŒ O bot nÃ£o tem permissÃ£o para alterar o limite desta sala. Verifique **Gerenciar canais**.' : 'âŒ NÃ£o foi possÃ­vel alterar o limite da sala.' });
     }
 
   }
@@ -8060,14 +8088,14 @@ async function handleTempVoiceModalAction(
         )
 
         .trim();
-    if (!name) return interaction.editReply({ content: '❌ Informe um nome válido para a sala.' });
+    if (!name) return interaction.editReply({ content: 'âŒ Informe um nome vÃ¡lido para a sala.' });
 
     try {
       await channel.setName(name);
-      return interaction.editReply({ content: `✅ Sala renomeada para **${name}**.` });
+      return interaction.editReply({ content: `âœ… Sala renomeada para **${name}**.` });
     } catch (error) {
       console.error('[TempVoice] Erro ao renomear sala:', error);
-      return interaction.editReply({ content: error?.code === 50013 ? '❌ O bot não tem permissão para renomear esta sala. Verifique **Gerenciar canais** e as permissões da categoria.' : '❌ Não foi possível renomear a sala.' });
+      return interaction.editReply({ content: error?.code === 50013 ? 'âŒ O bot nÃ£o tem permissÃ£o para renomear esta sala. Verifique **Gerenciar canais** e as permissÃµes da categoria.' : 'âŒ NÃ£o foi possÃ­vel renomear a sala.' });
     }
 
   }
@@ -8136,7 +8164,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        '❌ Você não é o dono desta sala.',
+        'âŒ VocÃª nÃ£o Ã© o dono desta sala.',
 
       ephemeral: true
 
@@ -8162,7 +8190,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        '❌ Usuário não encontrado.',
+        'âŒ UsuÃ¡rio nÃ£o encontrado.',
 
       ephemeral: true
 
@@ -8194,7 +8222,7 @@ async function handleTempVoiceSelect(
 
         content:
 
-          '❌ O usuário não está mais na sala.',
+          'âŒ O usuÃ¡rio nÃ£o estÃ¡ mais na sala.',
 
         ephemeral: true
 
@@ -8220,7 +8248,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        `👢 ${member} foi removido da sala.`,
+        `ðŸ‘¢ ${member} foi removido da sala.`,
 
       components: []
 
@@ -8294,7 +8322,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        `👑 A posse da sala foi transferida para ${member}.`,
+        `ðŸ‘‘ A posse da sala foi transferida para ${member}.`,
 
       components: []
 
@@ -8308,7 +8336,7 @@ async function handleTempVoiceSelect(
 
 function buildTempVoicePanelPayload() {
   const embed = createEmbed({
-    title: tempVoiceConfig.title || '🔊 Salas de Voz Temporárias',
+    title: tempVoiceConfig.title || 'ðŸ”Š Salas de Voz TemporÃ¡rias',
     description: tempVoiceConfig.description || 'Clique no menu abaixo para criar e administrar sua sala de voz.',
     color: tempVoiceConfig.color || '#5865F2',
     footer: tempVoiceConfig.footer || undefined
@@ -8317,10 +8345,10 @@ function buildTempVoicePanelPayload() {
   if (tempVoiceConfig.banner) embed.setImage(tempVoiceConfig.banner);
   if (tempVoiceConfig.icon) embed.setThumbnail(tempVoiceConfig.icon);
 
-  const emojis = { create:'➕', rename:'✏️', lock:'🔒', unlock:'🔓', limit:'👥', kick:'👢', transfer:'👑', delete:'🗑️' };
+  const emojis = { create:'âž•', rename:'âœï¸', lock:'ðŸ”’', unlock:'ðŸ”“', limit:'ðŸ‘¥', kick:'ðŸ‘¢', transfer:'ðŸ‘‘', delete:'ðŸ—‘ï¸' };
   const actions = new StringSelectMenuBuilder()
     .setCustomId('tempvoice_action')
-    .setPlaceholder('🎙️ Selecione uma ação para sua sala')
+    .setPlaceholder('ðŸŽ™ï¸ Selecione uma aÃ§Ã£o para sua sala')
     .addOptions(Object.keys(tempVoiceConfig.options).filter(k => tempVoiceConfig.options[k]).map(option =>
       new StringSelectMenuOptionBuilder()
         .setLabel(getTempVoiceOptionLabel(option))
@@ -8333,17 +8361,17 @@ function buildTempVoicePanelPayload() {
 
   const config = new StringSelectMenuBuilder()
     .setCustomId('tempvoice_panel_config')
-    .setPlaceholder('⚙️ Configuração do painel')
+    .setPlaceholder('âš™ï¸ ConfiguraÃ§Ã£o do painel')
     .addOptions(
       ['description','title','color','banner','icon','footer','defaultName','categoryId','deleteAfterMinutes','userLimit','options','authorizedRoleId','reset'].map((value, i) => {
         const data = [
-          ['Descrição','Altera a descrição do embed.','📝'], ['Título','Altera o título do embed.','✏️'],
-          ['Cor','Define a cor hexadecimal do embed.','🎨'], ['Banner','Adiciona ou altera a imagem principal.','🖼️'],
-          ['Ícone / Thumbnail','Adiciona ou altera a thumbnail.','🖼️'], ['Rodapé','Personaliza o footer do painel.','📌'],
-          ['Nome padrão das calls','Define o nome usado ao criar salas.','🔊'], ['Categoria das calls','Define a categoria onde as salas serão criadas.','📁'],
-          ['Tempo de exclusão automática','Define os minutos que uma sala vazia permanece.','⏱️'], ['Limite padrão','Define o limite de usuários das novas salas.','👥'],
-          ['Opções / botões do painel','Ativa ou desativa as opções da Call Priv.','🎛️'], ['Permissão de configuração','Define o cargo autorizado a configurar o painel.','🔐'],
-          ['Restaurar padrão','Volta todas as configurações aos valores originais.','♻️']
+          ['DescriÃ§Ã£o','Altera a descriÃ§Ã£o do embed.','ðŸ“'], ['TÃ­tulo','Altera o tÃ­tulo do embed.','âœï¸'],
+          ['Cor','Define a cor hexadecimal do embed.','ðŸŽ¨'], ['Banner','Adiciona ou altera a imagem principal.','ðŸ–¼ï¸'],
+          ['Ãcone / Thumbnail','Adiciona ou altera a thumbnail.','ðŸ–¼ï¸'], ['RodapÃ©','Personaliza o footer do painel.','ðŸ“Œ'],
+          ['Nome padrÃ£o das calls','Define o nome usado ao criar salas.','ðŸ”Š'], ['Categoria das calls','Define a categoria onde as salas serÃ£o criadas.','ðŸ“'],
+          ['Tempo de exclusÃ£o automÃ¡tica','Define os minutos que uma sala vazia permanece.','â±ï¸'], ['Limite padrÃ£o','Define o limite de usuÃ¡rios das novas salas.','ðŸ‘¥'],
+          ['OpÃ§Ãµes / botÃµes do painel','Ativa ou desativa as opÃ§Ãµes da Call Priv.','ðŸŽ›ï¸'], ['PermissÃ£o de configuraÃ§Ã£o','Define o cargo autorizado a configurar o painel.','ðŸ”'],
+          ['Restaurar padrÃ£o','Volta todas as configuraÃ§Ãµes aos valores originais.','â™»ï¸']
         ][i];
         return new StringSelectMenuOptionBuilder().setLabel(data[0]).setDescription(data[1]).setEmoji(data[2]).setValue(value);
       })
@@ -8381,7 +8409,7 @@ async function sendTempVoicePanel(channel) {
 async function handleTempVoiceActionSelect(interaction) {
   const action = interaction.values[0];
   if (!tempVoiceConfig.options[action] && action !== 'create') {
-    return interaction.reply({ content:'❌ Esta opção está desativada no painel.', ephemeral:true });
+    return interaction.reply({ content:'âŒ Esta opÃ§Ã£o estÃ¡ desativada no painel.', ephemeral:true });
   }
 
   if (action === 'create') {
@@ -8390,13 +8418,13 @@ async function handleTempVoiceActionSelect(interaction) {
       const existingChannel = interaction.guild.channels.cache.get(existing[0]);
       if (existingChannel) {
         if (interaction.member.voice?.channelId !== existingChannel.id) await interaction.member.voice.setChannel(existingChannel).catch(() => {});
-        return interaction.reply({ content:`⚠️ Você já possui uma sala: ${existingChannel}`, ephemeral:true });
+        return interaction.reply({ content:`âš ï¸ VocÃª jÃ¡ possui uma sala: ${existingChannel}`, ephemeral:true });
       }
       tempRooms.delete(existing[0]);
       saveTempRooms();
     }
 
-    // A criação da sala pode passar de 3 segundos. Reconheça a interação antes da API do Discord.
+    // A criaÃ§Ã£o da sala pode passar de 3 segundos. ReconheÃ§a a interaÃ§Ã£o antes da API do Discord.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
@@ -8404,13 +8432,13 @@ async function handleTempVoiceActionSelect(interaction) {
       if (interaction.member.voice?.channelId !== channel.id) {
         await interaction.member.voice.setChannel(channel).catch(() => {});
       }
-      return interaction.editReply({ content:`✅ Sua sala foi criada: ${channel}` });
+      return interaction.editReply({ content:`âœ… Sua sala foi criada: ${channel}` });
     } catch (error) {
       console.error('[TempVoice] Erro ao criar sala:', error);
       return interaction.editReply({
         content: error?.code === 50013
-          ? '❌ O bot não tem permissão para criar/configurar a sala. Verifique **Gerenciar canais**, **Gerenciar permissões** e as permissões da categoria.'
-          : '❌ Não foi possível criar sua sala de voz. Verifique as permissões do bot e a categoria configurada.'
+          ? 'âŒ O bot nÃ£o tem permissÃ£o para criar/configurar a sala. Verifique **Gerenciar canais**, **Gerenciar permissÃµes** e as permissÃµes da categoria.'
+          : 'âŒ NÃ£o foi possÃ­vel criar sua sala de voz. Verifique as permissÃµes do bot e a categoria configurada.'
       });
     }
   }
@@ -8420,7 +8448,7 @@ async function handleTempVoiceActionSelect(interaction) {
 async function handleTempVoicePanelConfigSelect(interaction) {
   if (!isTempVoicePanelAdmin(interaction.member)) {
     const roleId = tempVoiceConfig.authorizedRoleId || COMMAND_ACCESS_ROLE_ID;
-    return interaction.reply({ content:`❌ Apenas Administrador ou membros com o cargo <@&${roleId}> podem configurar o painel.`, ephemeral:true });
+    return interaction.reply({ content:`âŒ Apenas Administrador ou membros com o cargo <@&${roleId}> podem configurar o painel.`, ephemeral:true });
   }
 
   const option = interaction.values[0];
@@ -8428,19 +8456,19 @@ async function handleTempVoicePanelConfigSelect(interaction) {
     resetTempVoiceConfig();
     saveTempVoiceConfig();
     await refreshTempVoicePanel(interaction.guild);
-    return interaction.reply({ content:'♻️ Todas as configurações foram restauradas e o painel foi atualizado em tempo real.', ephemeral:true });
+    return interaction.reply({ content:'â™»ï¸ Todas as configuraÃ§Ãµes foram restauradas e o painel foi atualizado em tempo real.', ephemeral:true });
   }
 
   if (option === 'options') {
-    const modal = new ModalBuilder().setCustomId('tempvoice_panel_config:options').setTitle('🎛️ Opções do painel');
+    const modal = new ModalBuilder().setCustomId('tempvoice_panel_config:options').setTitle('ðŸŽ›ï¸ OpÃ§Ãµes do painel');
     for (const [key,label] of [['create','Criar sala'],['rename','Renomear sala'],['lock','Bloquear sala'],['unlock','Desbloquear sala'],['limit','Alterar limite'],['kick','Expulsar membro'],['transfer','Transferir posse'],['delete','Excluir sala']]) {
-      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(key).setLabel(`${label} — ON/OFF`).setPlaceholder('ON ou OFF').setValue(tempVoiceConfig.options[key] ? 'ON':'OFF').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)));
+      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(key).setLabel(`${label} â€” ON/OFF`).setPlaceholder('ON ou OFF').setValue(tempVoiceConfig.options[key] ? 'ON':'OFF').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)));
     }
     return interaction.showModal(modal);
   }
 
-  const labels = { description:'Descrição do painel', banner:'URL do banner', icon:'URL do ícone/thumbnail', title:'Título do painel', color:'Cor do embed', footer:'Rodapé do painel', defaultName:'Nome padrão das calls', categoryId:'ID da categoria das calls', deleteAfterMinutes:'Tempo para excluir sala vazia (minutos)', userLimit:'Limite padrão de usuários', authorizedRoleId:'ID do cargo autorizado' };
-  const placeholders = { description:'Ex.: Crie e administre sua própria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title:'🔊 Salas de Voz Temporárias', color:'#5865F2', footer:'Call Priv • Configuração dinâmica', defaultName:'🔊・{user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
+  const labels = { description:'DescriÃ§Ã£o do painel', banner:'URL do banner', icon:'URL do Ã­cone/thumbnail', title:'TÃ­tulo do painel', color:'Cor do embed', footer:'RodapÃ© do painel', defaultName:'Nome padrÃ£o das calls', categoryId:'ID da categoria das calls', deleteAfterMinutes:'Tempo para excluir sala vazia (minutos)', userLimit:'Limite padrÃ£o de usuÃ¡rios', authorizedRoleId:'ID do cargo autorizado' };
+  const placeholders = { description:'Ex.: Crie e administre sua prÃ³pria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title:'ðŸ”Š Salas de Voz TemporÃ¡rias', color:'#5865F2', footer:'Call Priv â€¢ ConfiguraÃ§Ã£o dinÃ¢mica', defaultName:'ðŸ”Šãƒ»{user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
   const modal = new ModalBuilder().setCustomId(`tempvoice_panel_config:${option}`).setTitle(labels[option]);
   const input = new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setStyle(option === 'description' || option === 'footer' ? TextInputStyle.Paragraph : TextInputStyle.Short).setRequired(false).setMaxLength(option === 'description' ? 4000 : 1000);
   const current = String(tempVoiceConfig[option] ?? '');
@@ -8450,44 +8478,44 @@ async function handleTempVoicePanelConfigSelect(interaction) {
 }
 
 async function handleTempVoicePanelConfigModal(interaction) {
-  if (!isTempVoicePanelAdmin(interaction.member)) return interaction.reply({ content:'❌ Você não possui permissão para configurar o painel.', ephemeral:true });
+  if (!isTempVoicePanelAdmin(interaction.member)) return interaction.reply({ content:'âŒ VocÃª nÃ£o possui permissÃ£o para configurar o painel.', ephemeral:true });
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const option = interaction.customId.split(':')[1];
 
   if (option === 'options') {
     for (const key of ['create','rename','lock','unlock','limit','kick','transfer','delete']) {
       const value = interaction.fields.getTextInputValue(key).trim().toUpperCase();
-      if (!['ON','OFF'].includes(value)) return interaction.editReply({ content:`❌ O campo **${getTempVoiceOptionLabel(key)}** deve ser \`ON\` ou \`OFF\`.` });
+      if (!['ON','OFF'].includes(value)) return interaction.editReply({ content:`âŒ O campo **${getTempVoiceOptionLabel(key)}** deve ser \`ON\` ou \`OFF\`.` });
       tempVoiceConfig.options[key] = value === 'ON';
     }
     tempVoiceConfig.options.create = true;
     saveTempVoiceConfig(); await refreshTempVoicePanel(interaction.guild);
-    return interaction.editReply({ content:'🎛️ Opções do painel atualizadas em tempo real.' });
+    return interaction.editReply({ content:'ðŸŽ›ï¸ OpÃ§Ãµes do painel atualizadas em tempo real.' });
   }
 
   const value = interaction.fields.getTextInputValue('value').trim();
-  if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({ content:'❌ Para banner/ícone, informe uma URL começando com `http://` ou `https://`.' });
-  if (option === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({ content:'❌ A cor deve estar no formato hexadecimal, por exemplo `#5865F2`.' });
+  if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({ content:'âŒ Para banner/Ã­cone, informe uma URL comeÃ§ando com `http://` ou `https://`.' });
+  if (option === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({ content:'âŒ A cor deve estar no formato hexadecimal, por exemplo `#5865F2`.' });
 
   if (option === 'deleteAfterMinutes') {
-    const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 10080) return interaction.editReply({ content:'❌ Informe um número inteiro entre 1 e 10080 minutos.' });
+    const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 10080) return interaction.editReply({ content:'âŒ Informe um nÃºmero inteiro entre 1 e 10080 minutos.' });
     tempVoiceConfig[option] = n;
   } else if (option === 'userLimit') {
-    const n = Number(value); if (!Number.isInteger(n) || n < 0 || n > 99) return interaction.editReply({ content:'❌ O limite deve ser um número entre 0 e 99. Use `0` para ilimitado.' });
+    const n = Number(value); if (!Number.isInteger(n) || n < 0 || n > 99) return interaction.editReply({ content:'âŒ O limite deve ser um nÃºmero entre 0 e 99. Use `0` para ilimitado.' });
     tempVoiceConfig[option] = n;
   } else if (option === 'categoryId') {
-    if (value) { const c = interaction.guild.channels.cache.get(value); if (!c || c.type !== ChannelType.GuildCategory) return interaction.editReply({ content:'❌ O ID informado não pertence a uma categoria válida deste servidor.' }); }
+    if (value) { const c = interaction.guild.channels.cache.get(value); if (!c || c.type !== ChannelType.GuildCategory) return interaction.editReply({ content:'âŒ O ID informado nÃ£o pertence a uma categoria vÃ¡lida deste servidor.' }); }
     tempVoiceConfig[option] = value;
   } else if (option === 'authorizedRoleId') {
-    if (value && !interaction.guild.roles.cache.get(value)) return interaction.editReply({ content:'❌ Não encontrei esse cargo neste servidor.' });
+    if (value && !interaction.guild.roles.cache.get(value)) return interaction.editReply({ content:'âŒ NÃ£o encontrei esse cargo neste servidor.' });
     tempVoiceConfig[option] = value;
   } else {
     tempVoiceConfig[option] = value;
   }
 
   normalizeTempVoiceConfig(); saveTempVoiceConfig(); await refreshTempVoicePanel(interaction.guild);
-  const names = { description:'Descrição', banner:'Banner', icon:'Ícone/Thumbnail', title:'Título', color:'Cor', footer:'Rodapé', defaultName:'Nome padrão', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclusão automática', userLimit:'Limite padrão', authorizedRoleId:'Permissão de configuração' };
-  return interaction.editReply({ content:`✅ ${names[option] || option} atualizado e aplicado em tempo real.` });
+  const names = { description:'DescriÃ§Ã£o', banner:'Banner', icon:'Ãcone/Thumbnail', title:'TÃ­tulo', color:'Cor', footer:'RodapÃ©', defaultName:'Nome padrÃ£o', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclusÃ£o automÃ¡tica', userLimit:'Limite padrÃ£o', authorizedRoleId:'PermissÃ£o de configuraÃ§Ã£o' };
+  return interaction.editReply({ content:`âœ… ${names[option] || option} atualizado e aplicado em tempo real.` });
 }
 
 
@@ -8516,7 +8544,7 @@ async function showCallRanking(
 
       content:
 
-        '📊 Ainda não existem dados de call suficientes.',
+        'ðŸ“Š Ainda nÃ£o existem dados de call suficientes.',
 
       ephemeral: true
 
@@ -8532,7 +8560,7 @@ async function showCallRanking(
 
       (row, index) =>
 
-        `**${index + 1}.** <@${row.user_id}> — **${formatHours(row.voice_seconds)}h**`
+        `**${index + 1}.** <@${row.user_id}> â€” **${formatHours(row.voice_seconds)}h**`
 
     );
 
@@ -8546,7 +8574,7 @@ async function showCallRanking(
 
         title:
 
-          '🏆 Ranking de Call',
+          'ðŸ† Ranking de Call',
 
         description:
 
@@ -8634,7 +8662,7 @@ async function showUserCallHours(
 
       content:
 
-        `🔊 <@${userId}> possui **${formatHours(seconds)} horas** em call.`
+        `ðŸ”Š <@${userId}> possui **${formatHours(seconds)} horas** em call.`
 
     });
 
@@ -8664,7 +8692,7 @@ async function showUserCallHours(
 
         content:
 
-          '❌ Não foi possível consultar as horas em call.'
+          'âŒ NÃ£o foi possÃ­vel consultar as horas em call.'
 
       });
 
@@ -8676,7 +8704,7 @@ async function showUserCallHours(
 
       content:
 
-        '❌ Não foi possível consultar as horas em call.',
+        'âŒ NÃ£o foi possÃ­vel consultar as horas em call.',
 
       flags: MessageFlags.Ephemeral
 
@@ -8708,7 +8736,7 @@ async function createMatchProfile(
 
       .setTitle(
 
-        `Perfil de Match — ${category}`
+        `Perfil de Match â€” ${category}`
 
       );
 
@@ -8876,7 +8904,7 @@ async function createMatchProfile(
 
       'social'
 
-    ) || 'Não informado';
+    ) || 'NÃ£o informado';
 
 
 
@@ -8886,7 +8914,7 @@ async function createMatchProfile(
 
       title:
 
-        `💘 Perfil de Match — ${nome}`,
+        `ðŸ’˜ Perfil de Match â€” ${nome}`,
 
 
 
@@ -8906,7 +8934,7 @@ async function createMatchProfile(
 
         {
 
-          name: '👤 Nome',
+          name: 'ðŸ‘¤ Nome',
 
           value: nome,
 
@@ -8916,7 +8944,7 @@ async function createMatchProfile(
 
         {
 
-          name: '🎂 Idade',
+          name: 'ðŸŽ‚ Idade',
 
           value: idade,
 
@@ -8926,7 +8954,7 @@ async function createMatchProfile(
 
         {
 
-          name: '📂 Categoria',
+          name: 'ðŸ“‚ Categoria',
 
           value: category,
 
@@ -8936,7 +8964,7 @@ async function createMatchProfile(
 
         {
 
-          name: '🌐 Rede Social',
+          name: 'ðŸŒ Rede Social',
 
           value: social,
 
@@ -8946,7 +8974,7 @@ async function createMatchProfile(
 
         {
 
-          name: '💬 Discord',
+          name: 'ðŸ’¬ Discord',
 
           value:
 
@@ -8984,7 +9012,7 @@ async function createMatchProfile(
 
           .setLabel(
 
-            '❤️ Dar Match'
+            'â¤ï¸ Dar Match'
 
           )
 
@@ -9006,7 +9034,7 @@ async function createMatchProfile(
 
           .setLabel(
 
-            '🚫 Bloquear'
+            'ðŸš« Bloquear'
 
           )
 
@@ -9098,7 +9126,7 @@ async function createMatchProfile(
 
   await interaction.reply({
 
-    content:      '✅ Seu perfil foi criado e publicado no painel de Match.',
+    content:      'âœ… Seu perfil foi criado e publicado no painel de Match.',
 
     ephemeral: true
 
@@ -9128,7 +9156,7 @@ async function handleMatchLike(
 
       content:
 
-        '❌ Você não pode dar Match no próprio perfil.',
+        'âŒ VocÃª nÃ£o pode dar Match no prÃ³prio perfil.',
 
       ephemeral: true
 
@@ -9178,7 +9206,7 @@ async function handleMatchLike(
 
       content:
 
-        '❌ Perfil não encontrado.',
+        'âŒ Perfil nÃ£o encontrado.',
 
       ephemeral: true
 
@@ -9284,7 +9312,7 @@ async function handleMatchLike(
 
         content:
 
-          `💘 **Match mútuo!**\nVocê e ${target || `<@${targetId}>`} deram Match um no outro!`
+          `ðŸ’˜ **Match mÃºtuo!**\nVocÃª e ${target || `<@${targetId}>`} deram Match um no outro!`
 
       });
 
@@ -9300,7 +9328,7 @@ async function handleMatchLike(
 
           content:
 
-            `💘 **Match mútuo!**\nVocê e ${interaction.user} deram Match um no outro!`
+            `ðŸ’˜ **Match mÃºtuo!**\nVocÃª e ${interaction.user} deram Match um no outro!`
 
         });
 
@@ -9314,7 +9342,7 @@ async function handleMatchLike(
 
       content:
 
-        '💘 **Match mútuo!** As duas pessoas receberam uma notificação por DM.',
+        'ðŸ’˜ **Match mÃºtuo!** As duas pessoas receberam uma notificaÃ§Ã£o por DM.',
 
       ephemeral: true
 
@@ -9328,7 +9356,7 @@ async function handleMatchLike(
 
     content:
 
-      '❤️ Interesse registrado! Se a outra pessoa também curtir seu perfil, será um Match mútuo.',
+      'â¤ï¸ Interesse registrado! Se a outra pessoa tambÃ©m curtir seu perfil, serÃ¡ um Match mÃºtuo.',
 
     ephemeral: true
 
@@ -9404,7 +9432,7 @@ async function handleMatchBlock(
 
     content:
 
-      '🚫 Perfil bloqueado para você.',
+      'ðŸš« Perfil bloqueado para vocÃª.',
 
     ephemeral: true
 
@@ -9444,7 +9472,7 @@ async function sendMatchPanel(
 
       footer:
 
-        'Crie seu perfil e encontre novas conexões.'
+        'Crie seu perfil e encontre novas conexÃµes.'
 
     });
 
@@ -9614,7 +9642,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Verifica se o bot está online.'
+        'Verifica se o bot estÃ¡ online.'
 
       ),
 
@@ -9670,7 +9698,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usuário.'
+            'UsuÃ¡rio.'
 
           )
 
@@ -9714,7 +9742,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usuário.'
+            'UsuÃ¡rio.'
 
           )
 
@@ -9794,7 +9822,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usuário.'
+                'UsuÃ¡rio.'
 
               )
 
@@ -9840,7 +9868,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usuário.'
+                'UsuÃ¡rio.'
 
               )
 
@@ -9902,7 +9930,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra o painel de estatísticas.'
+        'Mostra o painel de estatÃ­sticas.'
 
       ),
 
@@ -9914,7 +9942,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Envia o painel de verificação.'
+        'Envia o painel de verificaÃ§Ã£o.'
 
       ),
 
@@ -9926,7 +9954,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Envia o painel de salas temporárias.'
+        'Envia o painel de salas temporÃ¡rias.'
 
       ),
 
@@ -9950,7 +9978,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra as horas de call de um usuário.'
+        'Mostra as horas de call de um usuÃ¡rio.'
 
       )
 
@@ -9962,7 +9990,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usuário.'
+            'UsuÃ¡rio.'
 
           )
 
@@ -9978,7 +10006,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra as horas de call de um usuário.'
+        'Mostra as horas de call de um usuÃ¡rio.'
 
       )
 
@@ -9990,7 +10018,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usuário.'
+            'UsuÃ¡rio.'
 
           )
 
@@ -10056,7 +10084,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Título.'
+                'TÃ­tulo.'
 
               )
 
@@ -10127,7 +10155,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Gerencia permissões personalizadas.'
+        'Gerencia permissÃµes personalizadas.'
 
       )
 
@@ -10139,7 +10167,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Concede uma permissão a um cargo.'
+            'Concede uma permissÃ£o a um cargo.'
 
           )
 
@@ -10167,7 +10195,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permissão.'
+                'PermissÃ£o.'
 
               )
 
@@ -10201,7 +10229,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Remove uma permissão.'
+            'Remove uma permissÃ£o.'
 
           )
 
@@ -10229,7 +10257,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permissão.'
+                'PermissÃ£o.'
 
               )
 
@@ -10263,7 +10291,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Lista as permissões de um cargo.'
+            'Lista as permissÃµes de um cargo.'
 
           )
 
@@ -10399,7 +10427,7 @@ async function handleSlashCommand(
 
       content:
 
-        `🏓 Pong! ${client.ws.ping}ms`,
+        `ðŸ“ Pong! ${client.ws.ping}ms`,
 
       ephemeral: true
 
@@ -10431,7 +10459,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui a permissão `dashboard.view`.',
+          'âŒ VocÃª nÃ£o possui a permissÃ£o `dashboard.view`.',
 
         ephemeral: true
 
@@ -10525,7 +10553,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui a permissão `verification.manage`.',
+          'âŒ VocÃª nÃ£o possui a permissÃ£o `verification.manage`.',
 
         ephemeral: true
 
@@ -10547,7 +10575,7 @@ async function handleSlashCommand(
 
       content:
 
-        '✅ Painel de verificação enviado.',
+        'âœ… Painel de verificaÃ§Ã£o enviado.',
 
       ephemeral: true
 
@@ -10579,7 +10607,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui a permissão `voice.manage`.',
+          'âŒ VocÃª nÃ£o possui a permissÃ£o `voice.manage`.',
 
         ephemeral: true
 
@@ -10601,7 +10629,7 @@ async function handleSlashCommand(
 
       content:
 
-        '✅ Painel de voz enviado.',
+        'âœ… Painel de voz enviado.',
 
       ephemeral: true
 
@@ -10633,7 +10661,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui a permissão `match.manage`.',
+          'âŒ VocÃª nÃ£o possui a permissÃ£o `match.manage`.',
 
         ephemeral: true
 
@@ -10655,7 +10683,7 @@ async function handleSlashCommand(
 
       content:
 
-        '✅ Painel de Match enviado.',
+        'âœ… Painel de Match enviado.',
 
       ephemeral: true
 
@@ -10707,7 +10735,7 @@ async function handleSlashCommand(
 
       return interaction.editReply(
 
-        `❌ ${e.message}`
+        `âŒ ${e.message}`
 
       );
 
@@ -10735,7 +10763,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui a permissão `rules.manage`.',
+          'âŒ VocÃª nÃ£o possui a permissÃ£o `rules.manage`.',
 
         ephemeral: true
 
@@ -10753,7 +10781,7 @@ async function handleSlashCommand(
     if (sub === 'panel') {
       const ok = await refreshRulesPanel(interaction.guild);
       return interaction.reply({
-        content: ok ? `✅ Painel de regras enviado/renovado no canal <#${RULES_CHANNEL_ID}>.` : '❌ Não consegui acessar o canal configurado para as regras.',
+        content: ok ? `âœ… Painel de regras enviado/renovado no canal <#${RULES_CHANNEL_ID}>.` : 'âŒ NÃ£o consegui acessar o canal configurado para as regras.',
         flags: MessageFlags.Ephemeral
       });
     }
@@ -10778,7 +10806,7 @@ async function handleSlashCommand(
 
           content:
 
-            '📜 Nenhuma regra cadastrada.',
+            'ðŸ“œ Nenhuma regra cadastrada.',
 
           ephemeral: true
 
@@ -10796,7 +10824,7 @@ async function handleSlashCommand(
 
             rule =>
 
-              `**#${rule.rule_id} — ${rule.title}**\n${rule.content}`
+              `**#${rule.rule_id} â€” ${rule.title}**\n${rule.content}`
 
           )
 
@@ -10812,7 +10840,7 @@ async function handleSlashCommand(
 
             title:
 
-              '📜 Regras do servidor',
+              'ðŸ“œ Regras do servidor',
 
             description:
 
@@ -10900,7 +10928,7 @@ async function handleSlashCommand(
 
         content:
 
-          '✅ Regra adicionada.',
+          'âœ… Regra adicionada.',
 
         ephemeral: true
 
@@ -10954,7 +10982,7 @@ async function handleSlashCommand(
 
         content:
 
-          '✅ Regra removida, caso existisse.',
+          'âœ… Regra removida, caso existisse.',
 
         ephemeral: true
 
@@ -10978,7 +11006,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Somente administradores do Discord podem configurar permissões personalizadas.',
+          'âŒ Somente administradores do Discord podem configurar permissÃµes personalizadas.',
 
         ephemeral: true
 
@@ -11034,7 +11062,7 @@ async function handleSlashCommand(
 
         content:
 
-          `✅ \`${permission}\` concedida ao cargo ${role}.`,
+          `âœ… \`${permission}\` concedida ao cargo ${role}.`,
 
         ephemeral: true
 
@@ -11062,7 +11090,7 @@ async function handleSlashCommand(
 
         content:
 
-          `✅ \`${permission}\` removida do cargo ${role}.`,
+          `âœ… \`${permission}\` removida do cargo ${role}.`,
 
         ephemeral: true
 
@@ -11092,9 +11120,9 @@ async function handleSlashCommand(
 
           permissions.length
 
-            ? `🔐 Permissões de ${role}:\n${permissions.map(p => `• \`${p}\``).join('\n')}`
+            ? `ðŸ” PermissÃµes de ${role}:\n${permissions.map(p => `â€¢ \`${p}\``).join('\n')}`
 
-            : `ℹ️ O cargo ${role} não possui permissões personalizadas.`,
+            : `â„¹ï¸ O cargo ${role} nÃ£o possui permissÃµes personalizadas.`,
 
         ephemeral: true
 
@@ -11124,7 +11152,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui `moderation.clear`.',
+          'âŒ VocÃª nÃ£o possui `moderation.clear`.',
 
         ephemeral: true
 
@@ -11168,7 +11196,7 @@ async function handleSlashCommand(
 
     return interaction.editReply(
 
-      `🧹 ${deleted.size} mensagens apagadas.`
+      `ðŸ§¹ ${deleted.size} mensagens apagadas.`
 
     );
 
@@ -11210,7 +11238,7 @@ async function handleSlashCommand(
 
         content:
 
-          `❌ Você não possui \`${permission}\`.`,
+          `âŒ VocÃª nÃ£o possui \`${permission}\`.`,
 
         ephemeral: true
 
@@ -11260,7 +11288,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Membro não encontrado.',
+          'âŒ Membro nÃ£o encontrado.',
 
         ephemeral: true
 
@@ -11308,7 +11336,7 @@ async function handleSlashCommand(
 
         interaction.guild,
 
-        `🛡️ **${command.toUpperCase()}**\nUsuário: ${user}\nModerador: ${interaction.user}\nMotivo: ${reason}`
+        `ðŸ›¡ï¸ **${command.toUpperCase()}**\nUsuÃ¡rio: ${user}\nModerador: ${interaction.user}\nMotivo: ${reason}`
 
       );
 
@@ -11318,7 +11346,7 @@ async function handleSlashCommand(
 
         content:
 
-          `✅ ${user.tag} foi ${command === 'kick' ? 'expulso' : 'banido'}.`,
+          `âœ… ${user.tag} foi ${command === 'kick' ? 'expulso' : 'banido'}.`,
 
         ephemeral: true
 
@@ -11330,7 +11358,7 @@ async function handleSlashCommand(
 
         content:
 
-          `❌ Não foi possível executar a ação: ${e.message}`,
+          `âŒ NÃ£o foi possÃ­vel executar a aÃ§Ã£o: ${e.message}`,
 
         ephemeral: true
 
@@ -11358,7 +11386,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você precisa ser administrador para usar este comando.',
+          'âŒ VocÃª precisa ser administrador para usar este comando.',
 
         ephemeral: true
 
@@ -11414,7 +11442,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Membro não encontrado.',
+          'âŒ Membro nÃ£o encontrado.',
 
         ephemeral: true
 
@@ -11450,7 +11478,7 @@ async function handleSlashCommand(
 
         content:
 
-          `✅ Cargo ${role} ${sub === 'add' ? 'adicionado a' : 'removido de'} ${member}.`,
+          `âœ… Cargo ${role} ${sub === 'add' ? 'adicionado a' : 'removido de'} ${member}.`,
 
         ephemeral: true
 
@@ -11462,7 +11490,7 @@ async function handleSlashCommand(
 
         content:
 
-          `❌ Erro ao gerenciar cargo: ${e.message}`,
+          `âŒ Erro ao gerenciar cargo: ${e.message}`,
 
         ephemeral: true
 
@@ -11494,7 +11522,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui `ticket.manage`.',
+          'âŒ VocÃª nÃ£o possui `ticket.manage`.',
 
         ephemeral: true
 
@@ -11640,7 +11668,7 @@ async function handleSlashCommand(
 
       content:
 
-        `🎫 ${interaction.user}, seu ticket foi criado.\nUse **/close** quando quiser fechá-lo.`
+        `ðŸŽ« ${interaction.user}, seu ticket foi criado.\nUse **/close** quando quiser fechÃ¡-lo.`
 
     });
 
@@ -11650,7 +11678,7 @@ async function handleSlashCommand(
 
       content:
 
-        `✅ Ticket criado: ${channel}`,
+        `âœ… Ticket criado: ${channel}`,
 
       ephemeral: true
 
@@ -11688,7 +11716,7 @@ async function handleSlashCommand(
 
         content:
 
-          '❌ Você não possui permissão para fechar este ticket.',
+          'âŒ VocÃª nÃ£o possui permissÃ£o para fechar este ticket.',
 
         ephemeral: true
 
@@ -11730,7 +11758,7 @@ async function handleSlashCommand(
 
       content:
 
-        '🔒 Ticket fechado.'
+        'ðŸ”’ Ticket fechado.'
 
     });
 
@@ -11782,7 +11810,7 @@ client.once(
 
           ? 'sim'
 
-          : 'não'
+          : 'nÃ£o'
 
       }`
 
@@ -11885,7 +11913,7 @@ client.once(
             });
 
           voiceConnection.on('error', (error) => {
-            console.warn('[Voice] Erro na conexão de voz:', error?.message || error);
+            console.warn('[Voice] Erro na conexÃ£o de voz:', error?.message || error);
             try { voiceConnection?.destroy(); } catch {}
             voiceConnection = null;
           });
@@ -12003,7 +12031,7 @@ client.on(
           await interaction.deferUpdate().catch(() => {});
           await publishRankCallPanel(interaction.guild, { page: nextPage, streakPage: rankCallConfig.streakPage || 0 });
         } catch (error) {
-          console.error('[RankCall] Paginação de horas:', error.message);
+          console.error('[RankCall] PaginaÃ§Ã£o de horas:', error.message);
         }
         return;
       }
@@ -12020,7 +12048,7 @@ client.on(
           await interaction.deferUpdate().catch(() => {});
           await publishRankCallPanel(interaction.guild, { page: rankCallConfig.page || 0, streakPage: nextPage });
         } catch (error) {
-          console.error('[RankCall] Paginação de sequências:', error.message);
+          console.error('[RankCall] PaginaÃ§Ã£o de sequÃªncias:', error.message);
         }
         return;
       }
@@ -12609,7 +12637,7 @@ client.on(
 
             content:
 
-              '❌ Ocorreu um erro ao processar esta ação.',
+              'âŒ Ocorreu um erro ao processar esta aÃ§Ã£o.',
 
             ephemeral: true
 
@@ -12621,7 +12649,7 @@ client.on(
 
             content:
 
-              '❌ Ocorreu um erro ao processar esta ação.',
+              'âŒ Ocorreu um erro ao processar esta aÃ§Ã£o.',
 
             ephemeral: true
 
@@ -12687,26 +12715,26 @@ async function forwardIncomingDmToLog(message) {
 
     const logChannel = await client.channels.fetch(DM_LOG_CHANNEL_ID).catch(() => null);
     if (!logChannel?.isTextBased()) {
-      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} não encontrado ou não é de texto.`);
+      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} nÃ£o encontrado ou nÃ£o Ã© de texto.`);
       return true;
     }
 
-    const content = message.content?.trim() || '*Sem texto — veja os anexos abaixo.*';
+    const content = message.content?.trim() || '*Sem texto â€” veja os anexos abaixo.*';
     const attachmentLines = [...message.attachments.values()].map(
-      attachment => `📎 [${attachment.name || 'arquivo'}](${attachment.url})`
+      attachment => `ðŸ“Ž [${attachment.name || 'arquivo'}](${attachment.url})`
     );
 
     const description = [
-      `👤 **Usuário:** ${message.author.tag || message.author.username}`,
-      `🆔 **ID:** \`${message.author.id}\``,
+      `ðŸ‘¤ **UsuÃ¡rio:** ${message.author.tag || message.author.username}`,
+      `ðŸ†” **ID:** \`${message.author.id}\``,
       '',
-      '💬 **Mensagem:**',
+      'ðŸ’¬ **Mensagem:**',
       content,
       attachmentLines.length ? `\n${attachmentLines.join('\n')}` : ''
     ].filter(Boolean).join('\n').slice(0, 4096);
 
     const embed = new EmbedBuilder()
-      .setTitle('📩 Nova mensagem recebida no PV')
+      .setTitle('ðŸ“© Nova mensagem recebida no PV')
       .setDescription(description)
       .setColor('#5865F2')
       .setTimestamp(message.createdAt || new Date());
@@ -12829,7 +12857,7 @@ client.on(
 
         await message.reply(
 
-          `🏓 Pong! ${client.ws.ping}ms`
+          `ðŸ“ Pong! ${client.ws.ping}ms`
 
         );
 
@@ -12851,7 +12879,7 @@ client.on(
 
         await message.reply(
 
-          `👋 Olá, ${message.author}!`
+          `ðŸ‘‹ OlÃ¡, ${message.author}!`
 
         );
 
@@ -12871,7 +12899,7 @@ client.on(
 
       ) {
         await refreshRules2Panel(message.guild);
-        await message.reply('✅ Painel de regras 2 publicado/atualizado neste canal.');
+        await message.reply('âœ… Painel de regras 2 publicado/atualizado neste canal.');
         return;
       }
 
@@ -13009,7 +13037,7 @@ client.on(
               });
 
             voiceConnection.on('error', (error) => {
-              console.warn('[Voice] Erro na conexão de voz:', error?.message || error);
+              console.warn('[Voice] Erro na conexÃ£o de voz:', error?.message || error);
               try { voiceConnection?.destroy(); } catch {}
               voiceConnection = null;
             });
@@ -13018,7 +13046,7 @@ client.on(
 
             await message.reply(
 
-              `🔊 Entrei em **${channel.name}**.`
+              `ðŸ”Š Entrei em **${channel.name}**.`
 
             );
 
@@ -13026,7 +13054,7 @@ client.on(
 
             await message.reply(
 
-              `❌ Erro ao entrar na call: ${e.message}`
+              `âŒ Erro ao entrar na call: ${e.message}`
 
             );
 
@@ -13036,7 +13064,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Entre em um canal de voz primeiro.'
+            'âŒ Entre em um canal de voz primeiro.'
 
           );
 
@@ -13074,7 +13102,7 @@ client.on(
 
           await message.reply(
 
-            '👋 Saí da call.'
+            'ðŸ‘‹ SaÃ­ da call.'
 
           );
 
@@ -13114,7 +13142,7 @@ client.on(
 
         } else {
 
-          await message.reply('❌ O comando de DM não está disponível no momento.').catch(() => {});
+          await message.reply('âŒ O comando de DM nÃ£o estÃ¡ disponÃ­vel no momento.').catch(() => {});
 
         }
 
@@ -13154,7 +13182,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Você não possui `match.manage`.'
+            'âŒ VocÃª nÃ£o possui `match.manage`.'
 
           );
 
@@ -13202,7 +13230,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Você precisa ser administrador.'
+            'âŒ VocÃª precisa ser administrador.'
 
           );
 
@@ -13226,7 +13254,7 @@ client.on(
 
         await cloned.send(
 
-          '💥 Canal recriado com sucesso.'
+          'ðŸ’¥ Canal recriado com sucesso.'
 
         );
 
@@ -13262,7 +13290,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Você não possui `moderation.clear`.'
+            'âŒ VocÃª nÃ£o possui `moderation.clear`.'
 
           );
 
@@ -13316,7 +13344,7 @@ client.on(
 
           await message.channel.send(
 
-            `🧹 ${deleted.size} mensagens apagadas.`
+            `ðŸ§¹ ${deleted.size} mensagens apagadas.`
 
           );
 
@@ -13368,7 +13396,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Você não possui `moderation.ban`.'
+            'âŒ VocÃª nÃ£o possui `moderation.ban`.'
 
           );
 
@@ -13390,7 +13418,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Mencione um usuário.'
+            'âŒ Mencione um usuÃ¡rio.'
 
           );
 
@@ -13416,7 +13444,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Usuário não encontrado.'
+            'âŒ UsuÃ¡rio nÃ£o encontrado.'
 
           );
 
@@ -13450,7 +13478,7 @@ client.on(
 
         await message.reply(
 
-          `🔨 ${user.tag} foi banido.`
+          `ðŸ”¨ ${user.tag} foi banido.`
 
         );
 
@@ -13486,7 +13514,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Você não possui `moderation.kick`.'
+            'âŒ VocÃª nÃ£o possui `moderation.kick`.'
 
           );
 
@@ -13508,7 +13536,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Mencione um usuário.'
+            'âŒ Mencione um usuÃ¡rio.'
 
           );
 
@@ -13534,7 +13562,7 @@ client.on(
 
           await message.reply(
 
-            '❌ Usuário não encontrado.'
+            'âŒ UsuÃ¡rio nÃ£o encontrado.'
 
           );
 
@@ -13556,7 +13584,7 @@ client.on(
 
         await message.reply(
 
-          `👢 ${user.tag} foi expulso.`
+          `ðŸ‘¢ ${user.tag} foi expulso.`
 
         );
 
@@ -13702,7 +13730,7 @@ client.on(
 
           await message.reply(
 
-            '👋 Como posso ajudar?'
+            'ðŸ‘‹ Como posso ajudar?'
 
           );
 
@@ -13748,7 +13776,7 @@ client.on(
 
           await message.reply(
 
-            `❌ Erro na IA: ${e.message}`
+            `âŒ Erro na IA: ${e.message}`
 
           );
 
@@ -13826,7 +13854,7 @@ async function showUserCallHoursFromMessage(
 
   await message.reply(
 
-    `🔊 <@${userId}> possui **${formatHours(seconds)} horas** em call.`
+    `ðŸ”Š <@${userId}> possui **${formatHours(seconds)} horas** em call.`
 
   );
 
@@ -13940,7 +13968,7 @@ const server = http.createServer(
 
             error:
 
-              'Bot não está em nenhum servidor.'
+              'Bot nÃ£o estÃ¡ em nenhum servidor.'
 
           })
 
@@ -14099,3 +14127,4 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
