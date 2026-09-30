@@ -2,88 +2,101 @@
   "1549489994530557992:960649183847657523": {
     "dates": [
       "2026-09-28",
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
       "2026-09-28": 70269,
-      "2026-09-29": 35335
+      "2026-09-29": 41134,
+      "2026-09-30": 5437
     },
-    "currentStreak": 2,
-    "bestStreak": 2,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 3,
+    "bestStreak": 3,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1530986397367009501": {
     "dates": [
       "2026-09-28",
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
       "2026-09-28": 70791,
-      "2026-09-29": 73273
+      "2026-09-29": 79072,
+      "2026-09-30": 13551
     },
-    "currentStreak": 2,
-    "bestStreak": 2,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 3,
+    "bestStreak": 3,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1451381084678787153": {
     "dates": [
       "2026-09-28",
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
       "2026-09-28": 39056,
-      "2026-09-29": 12332
+      "2026-09-29": 18131,
+      "2026-09-30": 13551
     },
-    "currentStreak": 2,
-    "bestStreak": 2,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 3,
+    "bestStreak": 3,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1543465749597655050": {
     "dates": [
       "2026-09-28",
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
       "2026-09-28": 44830,
-      "2026-09-29": 57599
+      "2026-09-29": 63398,
+      "2026-09-30": 13551
     },
-    "currentStreak": 2,
-    "bestStreak": 2,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 3,
+    "bestStreak": 3,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1499961991215845466": {
     "dates": [
       "2026-09-28",
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
       "2026-09-28": 39040,
-      "2026-09-29": 48912
+      "2026-09-29": 54712,
+      "2026-09-30": 13552
     },
-    "currentStreak": 2,
-    "bestStreak": 2,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 3,
+    "bestStreak": 3,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1465398060275208254": {
-    "dates": [],
+    "dates": [
+      "2026-09-30"
+    ],
     "dailySeconds": {
-      "2026-09-28": 141
+      "2026-09-28": 141,
+      "2026-09-30": 7210
     },
-    "currentStreak": 0,
-    "bestStreak": 0,
-    "lastActiveDate": "",
-    "lastQualifiedDate": "",
-    "missedDayNotified": ""
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
+    "missedDayNotified": "2026-09-29"
   },
   "1549489994530557992:1303946629103095899": {
     "dates": [
@@ -136,15 +149,17 @@
   },
   "1549489994530557992:934883104315818014": {
     "dates": [
-      "2026-09-29"
+      "2026-09-29",
+      "2026-09-30"
     ],
     "dailySeconds": {
-      "2026-09-29": 7235
+      "2026-09-29": 13034,
+      "2026-09-30": 5437
     },
-    "currentStreak": 1,
-    "bestStreak": 1,
-    "lastActiveDate": "2026-09-29",
-    "lastQualifiedDate": "2026-09-29",
+    "currentStreak": 2,
+    "bestStreak": 2,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   },
   "1549489994530557992:1554630343112265780": {
@@ -156,6 +171,19 @@
     "bestStreak": 0,
     "lastActiveDate": "",
     "lastQualifiedDate": "",
+    "missedDayNotified": ""
+  },
+  "1549489994530557992:531668493347717130": {
+    "dates": [
+      "2026-09-30"
+    ],
+    "dailySeconds": {
+      "2026-09-30": 7644
+    },
+    "currentStreak": 1,
+    "bestStreak": 1,
+    "lastActiveDate": "2026-09-30",
+    "lastQualifiedDate": "2026-09-30",
     "missedDayNotified": ""
   }
 }
