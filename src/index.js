@@ -1769,7 +1769,7 @@ function getLiveRankCallStreakRanking(guild) {
     // Não exibe a sequência como ativa antes dos 30 minutos do dia.
     // O histórico continua salvo normalmente; ao completar 30 min,
     // a data de hoje é adicionada e a sequência volta a aparecer.
-    if (todayQualified && currentStreak > 0) {
+    if (currentStreak > 0) {
       rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
     }
   }
