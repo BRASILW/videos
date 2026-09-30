@@ -3837,6 +3837,96 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
   return { embed, totalPages, safePage, userIds: rows.map(row => row.userId) };
 }
 
+function buildRankCallGeneralEmbed(guild, ranking, page = 0, userId = null) {
+  const pageSize = 10;
+  const totalPages = Math.max(1, Math.ceil(ranking.length / pageSize));
+  const safePage = Math.min(
+    Math.max(Number(page) || 0, 0),
+    totalPages - 1
+  );
+
+  const start = safePage * pageSize;
+  const rows = ranking.slice(start, start + pageSize);
+
+  const userIndex = userId
+    ? ranking.findIndex(row => row.userId === userId)
+    : -1;
+
+  const userPosition = userIndex >= 0 ? userIndex + 1 : 0;
+
+  const topThree = rows
+    .map((row, index) => {
+      const position = start + index + 1;
+      const duration = formatVoiceDuration(row.seconds);
+
+      let prefix = `**${position}º**`;
+
+      if (position === 1) prefix = '💜 **1º**';
+      if (position === 2) prefix = '💜 **2º**';
+      if (position === 3) prefix = '💜 **3º**';
+
+      return `${prefix} <@${row.userId}> — **${duration}**`;
+    })
+    .join('\n');
+
+  const embed = createEmbed({
+    title: '💜 Rank de Call - Top 10',
+    description: [
+      `Sua posição #${userPosition} na página ${safePage}`,
+      '',
+      '💜 **Top 3**',
+      '',
+      topThree || 'Nenhum usuário possui horas registradas em call.',
+      '',
+      rows.length > 3
+        ? rows.slice(3).map((row, index) => {
+            const position = start + index + 4;
+            return `**${position}.** <@${row.userId}> • ${formatVoiceDuration(row.seconds)}`;
+          }).join('\n')
+        : ''
+    ].filter(Boolean).join('\n'),
+    color: normalizeHexColor(rankCallConfig.color),
+    footer: `Ranking - Página ${safePage + 1} de ${totalPages} • ${guild.name}`
+  });
+
+  if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) {
+    embed.setThumbnail(rankCallConfig.icon);
+  }
+
+  if (rankCallConfig.banner && /^https?:\/\//i.test(rankCallConfig.banner)) {
+    embed.setImage(rankCallConfig.banner);
+  }
+
+  const components = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`rankcall_general_prev_${safePage}`)
+        .setLabel('◀️')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(safePage <= 0),
+
+      new ButtonBuilder()
+        .setCustomId(`rankcall_general_page_${safePage}`)
+        .setLabel(`#${safePage}`)
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(true),
+
+      new ButtonBuilder()
+        .setCustomId(`rankcall_general_next_${safePage}`)
+        .setLabel('▶️')
+        .setStyle(ButtonStyle.Primary)
+        .setDisabled(safePage >= totalPages - 1)
+    )
+  ];
+
+  return {
+    embed,
+    components,
+    totalPages,
+    safePage,
+    userIds: rows.map(row => row.userId)
+  };
+}
 function buildRankCallStreakEmbed(guild, page = 0) {
   const ranking = getLiveRankCallStreakRanking(guild);
   const pageSize = 10;
@@ -4050,45 +4140,14 @@ async function publishRankCallPanel(
     `[RankCall] PAGE RESULT | safePage=${hoursView.safePage} | totalPages=${hoursView.totalPages} | configDepois=${rankCallConfig.page}`
   );
 
-  const components = [];
-
-  if (hoursView.totalPages > 1) {
-    components.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`rankcall_prev_${hoursView.safePage}`)
-          .setLabel('Anterior')
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(hoursView.safePage <= 0),
-        new ButtonBuilder()
-          .setCustomId(`rankcall_next_${hoursView.safePage}`)
-          .setLabel('Próximo')
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(
-            hoursView.safePage >= hoursView.totalPages - 1
-          )
-      )
-    );
-  }
-
-  if (streakView.totalPages > 1) {
-    components.push(
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`rankstreak_prev_${streakView.safePage}`)
-          .setLabel('Anterior')
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(streakView.safePage <= 0),
-        new ButtonBuilder()
-          .setCustomId(`rankstreak_next_${streakView.safePage}`)
-          .setLabel('Próximo')
-          .setStyle(ButtonStyle.Primary)
-          .setDisabled(
-            streakView.safePage >= streakView.totalPages - 1
-          )
-      )
-    );
-  }
+  const components = [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('rankcall_general')
+        .setLabel('Geral')
+        .setStyle(ButtonStyle.Primary)
+    )
+  ];
 
   const userMentions = [
     ...new Set([
@@ -12048,6 +12107,83 @@ client.on(
 
 
 
+      if (
+        interaction.isButton() &&
+        /^rankcall_general_(prev|next)_\d+$/.test(interaction.customId)
+      ) {
+        try {
+          const match = interaction.customId.match(
+            /^rankcall_general_(prev|next)_(\d+)$/
+          );
+
+          const direction = match[1];
+          const currentPage = Number(match[2]) || 0;
+          const nextPage = Math.max(
+            0,
+            currentPage + (direction === 'next' ? 1 : -1)
+          );
+
+          const ranking = await getLiveVoiceRanking(interaction.guild);
+
+          const generalView = buildRankCallGeneralEmbed(
+            interaction.guild,
+            ranking,
+            nextPage,
+            interaction.user.id
+          );
+
+          await interaction.update({
+            embeds: [generalView.embed],
+            components: generalView.components,
+            allowedMentions: {
+              users: generalView.userIds,
+              roles: []
+            }
+          });
+        } catch (error) {
+          console.error(
+            '[RankCall] Erro na paginação do painel Geral:',
+            error.message
+          );
+        }
+
+        return;
+      }
+      if (
+        interaction.isButton() &&
+        interaction.customId === 'rankcall_general'
+      ) {
+        try {
+          const ranking = await getLiveVoiceRanking(interaction.guild);
+          const generalView = buildRankCallGeneralEmbed(
+            interaction.guild,
+            ranking,
+            0,
+            interaction.user.id
+          );
+
+          await interaction.reply({
+            embeds: [generalView.embed],
+            components: generalView.components,
+            ephemeral: true,
+            allowedMentions: {
+              users: generalView.userIds,
+              roles: []
+            }
+          });
+        } catch (error) {
+          console.error('[RankCall] Erro ao abrir painel Geral:', error.message);
+
+          if (!interaction.replied && !interaction.deferred) {
+            await interaction.reply({
+              content: 'Não foi possível abrir o ranking geral agora.',
+              ephemeral: true
+            }).catch(() => {});
+          }
+        }
+
+        return;
+      }
       if (
         interaction.isButton() &&
         /^rankcall_(prev|next)_\d+$/.test(interaction.customId)
