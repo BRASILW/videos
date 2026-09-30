@@ -907,7 +907,7 @@ let dmCommand;
 
 try {
 
-  dmCommand = require('./dm');
+  dmCommand = require('./commands/dm');
 
 } catch (e) {
 
