@@ -1,10 +1,10 @@
 ﻿require('dotenv').config();
 
-// Mant�m o processo vivo em rejei��es ass�ncronas conhecidas do sistema de voz.
+// Mantm o processo vivo em rejeições assíncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
   const message = String(reason?.message || reason || '');
   if (message.includes('Shard 0 not found') || message.includes('Cannot perform IP discovery - socket closed')) {
-    console.warn(`[Voice] Rejei��o ass�ncrona de voz ignorada: ${message}`);
+    console.warn(`[Voice] Rejeição assóncrona de voz ignorada: ${message}`);
     return;
   }
   console.error('[unhandledRejection]', reason);
@@ -92,7 +92,7 @@ try {
 
   console.warn(
 
-    '[DB] Pacote pg n�o instalado. Instale com: npm i pg'
+    '[DB] Pacote pg não instalado. Instale com: npm i pg'
 
   );
 
@@ -108,7 +108,7 @@ if (!token) {
 
   console.error(
 
-    'ERRO CR�TICO: Defina DISCORD_TOKEN no .env.'
+    'ERRO CRÍTICO: Defina DISCORD_TOKEN no .env.'
 
   );
 
@@ -209,13 +209,13 @@ const RULES_CONFIG_FILE =
   path.join(__dirname, 'rules-panel-config.json');
 
 let rulesPanelConfig = {
-  title: '=� Regras do Servidor',
+  title: '= Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Leia com aten��o antes de participar.',
-  rulesText: '1=� Respeite todos os membros.\n\n2=� N�o fa�a spam ou flood.\n\n3=� N�o divulgue servidores, links ou servi�os sem autoriza��o.\n\n4=� Use cada canal para sua finalidade.\n\n5=� Siga as regras do Discord e as orienta��es da equipe.',
+  footer: 'Leia com atenção antes de participar.',
+  rulesText: '1= Respeite todos os membros.\n\n2= Não faía spam ou flood.\n\n3= Não divulgue servidores, links ou servios sem autorização.\n\n4= Use cada canal para sua finalidade.\n\n5= Siga as regras do Discord e as orientaíes da equipe.',
   messageId: ''
 };
 
@@ -227,14 +227,14 @@ try {
     };
   }
 } catch (e) {
-  console.warn('[Rules] Erro ao carregar configura��o:', e.message);
+  console.warn('[Rules] Erro ao carregar configuração:', e.message);
 }
 
 function saveRulesPanelConfig() {
   try {
     fs.writeFileSync(RULES_CONFIG_FILE, JSON.stringify(rulesPanelConfig, null, 2), 'utf8');
   } catch (e) {
-    console.error('[Rules] Erro ao salvar configura��o:', e.message);
+    console.error('[Rules] Erro ao salvar configuração:', e.message);
   }
 }
 
@@ -247,7 +247,7 @@ function isRulesPanelAdmin(member) {
 
 function buildRulesPanelPayload() {
   const embed = createEmbed({
-    title: rulesPanelConfig.title || '=� Regras do Servidor',
+    title: rulesPanelConfig.title || '= Regras do Servidor',
     description: `${rulesPanelConfig.description || ''}\n\n${rulesPanelConfig.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rulesPanelConfig.color || '#5865F2',
     footer: rulesPanelConfig.footer || undefined
@@ -263,12 +263,12 @@ function buildRulesPanelPayload() {
         new ButtonBuilder()
           .setCustomId('rules_admin_edit')
           .setLabel('Editar regras')
-          .setEmoji('=�')
+          .setEmoji('=')
           .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
           .setCustomId('rules_admin_appearance')
-          .setLabel('Alterar apar�ncia')
-          .setEmoji('<�')
+          .setLabel('Alterar aparência')
+          .setEmoji('<')
           .setStyle(ButtonStyle.Secondary)
       )
     ]
@@ -279,7 +279,7 @@ async function refreshRulesPanel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES_CHANNEL_ID).catch(() => null);
   if (!channel?.isTextBased()) {
-    console.warn(`[Rules] Canal ${RULES_CHANNEL_ID} n�o encontrado ou n�o � de texto.`);
+    console.warn(`[Rules] Canal ${RULES_CHANNEL_ID} não encontrado ou não  de texto.`);
     return false;
   }
 
@@ -289,11 +289,11 @@ async function refreshRulesPanel(guild) {
     const missing = [
       [PermissionFlagsBits.ViewChannel, 'Ver canal'],
       [PermissionFlagsBits.SendMessages, 'Enviar mensagens'],
-      [PermissionFlagsBits.ReadMessageHistory, 'Ver hist�rico de mensagens'],
+      [PermissionFlagsBits.ReadMessageHistory, 'Ver histórico de mensagens'],
       [PermissionFlagsBits.ManageMessages, 'Gerenciar mensagens'],
       [PermissionFlagsBits.EmbedLinks, 'Incorporar links']
     ].filter(([flag]) => !permissions.has(flag)).map(([, name]) => name);
-    throw Object.assign(new Error(`Permiss�es ausentes: ${missing.join(', ')}`), { code: 50013, missing });
+    throw Object.assign(new Error(`Permissões ausentes: ${missing.join(', ')}`), { code: 50013, missing });
   }
 
   if (rulesPanelConfig.messageId) {
@@ -332,11 +332,11 @@ async function handleRulesButton(interaction) {
   }
 
   if (interaction.customId === 'rules_admin_edit') {
-    const modal = new ModalBuilder().setCustomId('rules_edit_modal').setTitle('=� Editar regras');
+    const modal = new ModalBuilder().setCustomId('rules_edit_modal').setTitle('= Editar regras');
 
     const titleInput = new TextInputBuilder()
       .setCustomId('title')
-      .setLabel('T�tulo')
+      .setLabel('Título')
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setMaxLength(256)
@@ -344,7 +344,7 @@ async function handleRulesButton(interaction) {
 
     const descriptionInput = new TextInputBuilder()
       .setCustomId('description')
-      .setLabel('Descri��o')
+      .setLabel('Descrição')
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(false)
       .setMaxLength(1000)
@@ -369,25 +369,25 @@ async function handleRulesButton(interaction) {
   if (interaction.customId === 'rules_admin_appearance') {
     const menu = new StringSelectMenuBuilder()
       .setCustomId('rules_appearance_select')
-      .setPlaceholder('<� Escolha o que deseja alterar')
+      .setPlaceholder('< Escolha o que deseja alterar')
       .addOptions(
-        new StringSelectMenuOptionBuilder().setLabel('T�tulo').setDescription('Altera o t�tulo do embed.').setEmoji('').setValue('title'),
-        new StringSelectMenuOptionBuilder().setLabel('Descri��o').setDescription('Altera a descri��o do embed.').setEmoji('=�').setValue('description'),
-        new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('<�').setValue('color'),
-        new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('=�').setValue('banner'),
-        new StringSelectMenuOptionBuilder().setLabel('�cone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('=�').setValue('icon'),
-        new StringSelectMenuOptionBuilder().setLabel('Rodap�').setDescription('Altera o texto do rodap�.').setEmoji('�Y"O').setValue('footer')
+        new StringSelectMenuOptionBuilder().setLabel('Título').setDescription('Altera o ttulo do embed.').setEmoji('').setValue('title'),
+        new StringSelectMenuOptionBuilder().setLabel('Descrição').setDescription('Altera a descrição do embed.').setEmoji('=').setValue('description'),
+        new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('<').setValue('color'),
+        new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('=').setValue('banner'),
+        new StringSelectMenuOptionBuilder().setLabel('ícone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('=').setValue('icon'),
+        new StringSelectMenuOptionBuilder().setLabel('Rodapé').setDescription('Altera o texto do rodap.').setEmoji('Y"O').setValue('footer')
       );
-    return interaction.reply({ content: '<� Escolha a apar�ncia que deseja alterar:', components: [new ActionRowBuilder().addComponents(menu)], flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: '< Escolha a aparência que deseja alterar:', components: [new ActionRowBuilder().addComponents(menu)], flags: MessageFlags.Ephemeral });
   }
 }
 
 async function handleRulesAppearanceSelect(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({ content: 'L Voc� n�o possui permiss�o para configurar as regras.', flags: MessageFlags.Ephemeral });
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({ content: 'L Você não possui permissão para configurar as regras.', flags: MessageFlags.Ephemeral });
   const option = interaction.values[0];
-  const labels = { title:'T�tulo', description:'Descri��o', color:'Cor hexadecimal', banner:'URL do banner', icon:'URL do �cone/thumbnail', footer:'Rodap�' };
-  const placeholders = { title:'=� Regras do Servidor', description:'Leia as regras...', color:'#5865F2', banner:'https://...', icon:'https://...', footer:'Leia com aten��o.' };
-  const modal = new ModalBuilder().setCustomId(`rules_config_modal:${option}`).setTitle(`<� ${labels[option]}`);
+  const labels = { title:'Título', description:'Descrição', color:'Cor hexadecimal', banner:'URL do banner', icon:'URL do ícone/thumbnail', footer:'Rodapé' };
+  const placeholders = { title:'= Regras do Servidor', description:'Leia as regras...', color:'#5865F2', banner:'https://...', icon:'https://...', footer:'Leia com atenção.' };
+  const modal = new ModalBuilder().setCustomId(`rules_config_modal:${option}`).setTitle(`< ${labels[option]}`);
   const input = new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setRequired(false).setStyle(option === 'description' || option === 'footer' ? TextInputStyle.Paragraph : TextInputStyle.Short).setMaxLength(1000);
   const current = String(rulesPanelConfig[option] || '');
   if (current) input.setValue(current.slice(0, 1000));
@@ -397,10 +397,10 @@ async function handleRulesAppearanceSelect(interaction) {
 
 async function handleRulesModal(interaction) {
   if (!isRulesPanelAdmin(interaction.member)) {
-    return interaction.reply({ content: 'L Voc� n�o possui permiss�o para configurar as regras.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'L Você não possui permissão para configurar as regras.', flags: MessageFlags.Ephemeral });
   }
 
-  // Toda atualiza��o que pode apagar/enviar a mensagem precisa reconhecer a intera��o antes.
+  // Toda atualização que pode apagar/enviar a mensagem precisa reconhecer a interação antes.
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
@@ -409,12 +409,12 @@ async function handleRulesModal(interaction) {
       const description = interaction.fields.getTextInputValue('description').trim();
       const rulesText = interaction.fields.getTextInputValue('rulesText').trim();
 
-      rulesPanelConfig.title = title || '=� Regras do Servidor';
+      rulesPanelConfig.title = title || '= Regras do Servidor';
       rulesPanelConfig.description = description;
       rulesPanelConfig.rulesText = rulesText;
       saveRulesPanelConfig();
       await refreshRulesPanel(interaction.guild);
-      return interaction.editReply({ content: '. T�tulo, descri��o e texto das regras atualizados.' });
+      return interaction.editReply({ content: '. Título, descrição e texto das regras atualizados.' });
     }
 
     const option = interaction.customId.split(':')[1];
@@ -423,18 +423,18 @@ async function handleRulesModal(interaction) {
       return interaction.editReply({ content: 'L A cor deve estar no formato `#5865F2`.' });
     }
     if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) {
-      return interaction.editReply({ content: 'L Informe uma URL come�ando com `http://` ou `https://`.' });
+      return interaction.editReply({ content: 'L Informe uma URL começando com `http://` ou `https://`.' });
     }
 
     rulesPanelConfig[option] = value;
     saveRulesPanelConfig();
     await refreshRulesPanel(interaction.guild);
-    return interaction.editReply({ content: `. ${option} atualizado e o painel foi renovado.` });
+    return interaction.editReply({ content: `. ${option} atualizado e o painel foi renovado.` });
   } catch (error) {
-    console.error('[Rules] Erro ao atualizar configura��o:', error);
+    console.error('[Rules] Erro ao atualizar configuração:', error);
     return interaction.editReply({ content: error?.code === 50013
-      ? 'L O bot n�o tem permiss�o para apagar/enviar a mensagem no canal de regras. D� **Gerenciar mensagens**, **Enviar mensagens**, **Ver hist�rico de mensagens** e **Incorporar links** no canal.'
-      : 'L N�o foi poss�vel atualizar as regras. Verifique as permiss�es do bot e tente novamente.' });
+      ? 'L O bot não tem permissão para apagar/enviar a mensagem no canal de regras. Dê **Gerenciar mensagens**, **Enviar mensagens**, **Ver histórico de mensagens** e **Incorporar links** no canal.'
+      : 'L Não foi possível atualizar as regras. Verifique as permissões do bot e tente novamente.' });
   }
 }
 
@@ -446,13 +446,13 @@ const RULES2_CHANNEL_ID = '1553953899180728372';
 const RULES2_CONFIG_FILE = path.join(__dirname, 'rules-panel-config-2.json');
 
 let rules2Config = {
-  title: '=� Regras do Servidor',
+  title: '= Regras do Servidor',
   description: 'Leia e siga as regras do servidor para manter a comunidade organizada e segura.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Leia com aten��o antes de participar.',
-  rulesText: '1=� Respeite todos os membros.\n\n2=� N�o fa�a spam ou flood.\n\n3=� N�o divulgue servidores, links ou servi�os sem autoriza��o.\n\n4=� Use cada canal para sua finalidade.\n\n5=� Siga as regras do Discord e as orienta��es da equipe.',
+  footer: 'Leia com atenção antes de participar.',
+  rulesText: '1= Respeite todos os membros.\n\n2= Não faía spam ou flood.\n\n3= Não divulgue servidores, links ou servios sem autorização.\n\n4= Use cada canal para sua finalidade.\n\n5= Siga as regras do Discord e as orientaíes da equipe.',
   messageId: ''
 };
 
@@ -461,17 +461,17 @@ try {
     rules2Config = { ...rules2Config, ...JSON.parse(fs.readFileSync(RULES2_CONFIG_FILE, 'utf8')) };
   }
 } catch (e) {
-  console.warn('[Rules2] Erro ao carregar configura��o:', e.message);
+  console.warn('[Rules2] Erro ao carregar configuração:', e.message);
 }
 
 function saveRules2Config() {
   try { fs.writeFileSync(RULES2_CONFIG_FILE, JSON.stringify(rules2Config, null, 2), 'utf8'); }
-  catch (e) { console.error('[Rules2] Erro ao salvar configura��o:', e.message); }
+  catch (e) { console.error('[Rules2] Erro ao salvar configuração:', e.message); }
 }
 
 function buildRules2Payload() {
   const embed = createEmbed({
-    title: rules2Config.title || '=� Regras do Servidor',
+    title: rules2Config.title || '= Regras do Servidor',
     description: `${rules2Config.description || ''}\n\n${rules2Config.rulesText || 'Nenhuma regra configurada.'}`.slice(0, 4096),
     color: rules2Config.color || '#5865F2',
     footer: rules2Config.footer || undefined
@@ -481,8 +481,8 @@ function buildRules2Payload() {
   return {
     embeds: [embed],
     components: [new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rules2_admin_edit').setLabel('Editar regras').setEmoji('=�').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rules2_admin_appearance').setLabel('Alterar apar�ncia').setEmoji('<�').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('rules2_admin_edit').setLabel('Editar regras').setEmoji('=').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rules2_admin_appearance').setLabel('Alterar aparência').setEmoji('<').setStyle(ButtonStyle.Secondary)
     )]
   };
 }
@@ -490,14 +490,14 @@ function buildRules2Payload() {
 async function refreshRules2Panel(guild) {
   if (!guild) return false;
   const channel = await guild.channels.fetch(RULES2_CHANNEL_ID).catch(() => null);
-  if (!channel?.isTextBased()) throw new Error(`Canal ${RULES2_CHANNEL_ID} n�o encontrado ou n�o � de texto.`);
+  if (!channel?.isTextBased()) throw new Error(`Canal ${RULES2_CHANNEL_ID} não encontrado ou não  de texto.`);
   const me = channel.guild.members.me || await channel.guild.members.fetchMe().catch(() => null);
   const permissions = me ? channel.permissionsFor(me) : null;
   if (permissions && !permissions.has([
     PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages,
     PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages,
     PermissionFlagsBits.EmbedLinks
-  ])) throw Object.assign(new Error('Permiss�es insuficientes no canal de regras 2.'), {code:50013});
+  ])) throw Object.assign(new Error('Permissões insuficientes no canal de regras 2.'), {code:50013});
   if (rules2Config.messageId) {
     const old = await channel.messages.fetch(rules2Config.messageId).catch(() => null);
     if (old) await old.delete().catch(() => {});
@@ -529,31 +529,31 @@ async function handleRules2Button(interaction) {
     return interaction.reply({content:'L Apenas administradores ou membros autorizados podem configurar as regras.', flags:MessageFlags.Ephemeral});
 
   if (interaction.customId === 'rules2_admin_edit') {
-    const modal = new ModalBuilder().setCustomId('rules2_edit_modal').setTitle('=� Editar regras 2');
-    const title = new TextInputBuilder().setCustomId('title').setLabel('T�tulo').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(256).setValue(String(rules2Config.title||'').slice(0,256));
-    const desc = new TextInputBuilder().setCustomId('description').setLabel('Descri��o').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000).setValue(String(rules2Config.description||'').slice(0,1000));
+    const modal = new ModalBuilder().setCustomId('rules2_edit_modal').setTitle('= Editar regras 2');
+    const title = new TextInputBuilder().setCustomId('title').setLabel('Título').setStyle(TextInputStyle.Short).setRequired(false).setMaxLength(256).setValue(String(rules2Config.title||'').slice(0,256));
+    const desc = new TextInputBuilder().setCustomId('description').setLabel('Descrição').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(1000).setValue(String(rules2Config.description||'').slice(0,1000));
     const text = new TextInputBuilder().setCustomId('rulesText').setLabel('Texto das regras').setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(3800).setValue(String(rules2Config.rulesText||'').slice(0,3800));
     modal.addComponents(new ActionRowBuilder().addComponents(title),new ActionRowBuilder().addComponents(desc),new ActionRowBuilder().addComponents(text));
     return interaction.showModal(modal);
   }
 
-  const menu = new StringSelectMenuBuilder().setCustomId('rules2_appearance_select').setPlaceholder('<� Escolha o que deseja alterar').addOptions(
-    new StringSelectMenuOptionBuilder().setLabel('T�tulo').setDescription('Altera o t�tulo do embed.').setEmoji('').setValue('title'),
-    new StringSelectMenuOptionBuilder().setLabel('Descri��o').setDescription('Altera a descri��o do embed.').setEmoji('=�').setValue('description'),
-    new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('<�').setValue('color'),
-    new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('=�').setValue('banner'),
-    new StringSelectMenuOptionBuilder().setLabel('�cone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('=�').setValue('icon'),
-    new StringSelectMenuOptionBuilder().setLabel('Rodap�').setDescription('Altera o texto do rodap�.').setEmoji('�Y"O').setValue('footer')
+  const menu = new StringSelectMenuBuilder().setCustomId('rules2_appearance_select').setPlaceholder('< Escolha o que deseja alterar').addOptions(
+    new StringSelectMenuOptionBuilder().setLabel('Título').setDescription('Altera o ttulo do embed.').setEmoji('').setValue('title'),
+    new StringSelectMenuOptionBuilder().setLabel('Descrição').setDescription('Altera a descrição do embed.').setEmoji('=').setValue('description'),
+    new StringSelectMenuOptionBuilder().setLabel('Cor').setDescription('Altera a cor hexadecimal.').setEmoji('<').setValue('color'),
+    new StringSelectMenuOptionBuilder().setLabel('Banner').setDescription('Altera a imagem principal.').setEmoji('=').setValue('banner'),
+    new StringSelectMenuOptionBuilder().setLabel('ícone / Thumbnail').setDescription('Altera a thumbnail.').setEmoji('=').setValue('icon'),
+    new StringSelectMenuOptionBuilder().setLabel('Rodapé').setDescription('Altera o texto do rodap.').setEmoji('Y"O').setValue('footer')
   );
-  return interaction.reply({content:'<� Escolha a apar�ncia que deseja alterar:',components:[new ActionRowBuilder().addComponents(menu)],flags:MessageFlags.Ephemeral});
+  return interaction.reply({content:'< Escolha a aparência que deseja alterar:',components:[new ActionRowBuilder().addComponents(menu)],flags:MessageFlags.Ephemeral});
 }
 
 async function handleRules2Appearance(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'L Voc� n�o possui permiss�o.',flags:MessageFlags.Ephemeral});
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'L Você não possui permissão.',flags:MessageFlags.Ephemeral});
   const option=interaction.values[0];
-  const labels={title:'T�tulo',description:'Descri��o',color:'Cor hexadecimal',banner:'URL do banner',icon:'URL do �cone/thumbnail',footer:'Rodap�'};
-  const placeholders={title:'=� Regras do Servidor',description:'Leia as regras...',color:'#5865F2',banner:'https://...',icon:'https://...',footer:'Leia com aten��o.'};
-  const modal=new ModalBuilder().setCustomId(`rules2_config_modal:${option}`).setTitle(`<� ${labels[option]}`);
+  const labels={title:'Título',description:'Descrição',color:'Cor hexadecimal',banner:'URL do banner',icon:'URL do ícone/thumbnail',footer:'Rodapé'};
+  const placeholders={title:'= Regras do Servidor',description:'Leia as regras...',color:'#5865F2',banner:'https://...',icon:'https://...',footer:'Leia com atenção.'};
+  const modal=new ModalBuilder().setCustomId(`rules2_config_modal:${option}`).setTitle(`< ${labels[option]}`);
   const input=new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setRequired(false).setStyle(option==='description'||option==='footer'?TextInputStyle.Paragraph:TextInputStyle.Short).setMaxLength(1000);
   const current=String(rules2Config[option]||''); if(current) input.setValue(current.slice(0,1000));
   modal.addComponents(new ActionRowBuilder().addComponents(input));
@@ -561,25 +561,25 @@ async function handleRules2Appearance(interaction) {
 }
 
 async function handleRules2Modal(interaction) {
-  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'L Voc� n�o possui permiss�o.',flags:MessageFlags.Ephemeral});
+  if (!isRulesPanelAdmin(interaction.member)) return interaction.reply({content:'L Você não possui permissão.',flags:MessageFlags.Ephemeral});
   await interaction.deferReply({flags:MessageFlags.Ephemeral});
   try {
     if (interaction.customId==='rules2_edit_modal') {
-      rules2Config.title=interaction.fields.getTextInputValue('title').trim()||'=� Regras do Servidor';
+      rules2Config.title=interaction.fields.getTextInputValue('title').trim()||'= Regras do Servidor';
       rules2Config.description=interaction.fields.getTextInputValue('description').trim();
       rules2Config.rulesText=interaction.fields.getTextInputValue('rulesText').trim();
       saveRules2Config(); await refreshRules2Panel(interaction.guild);
-      return interaction.editReply({content:'. Regras 2 atualizadas.'});
+      return interaction.editReply({content:'. Regras 2 atualizadas.'});
     }
     const option=interaction.customId.split(':')[1];
     const value=interaction.fields.getTextInputValue('value').trim();
     if(option==='color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({content:'L A cor deve estar no formato `#5865F2`.'});
-    if((option==='banner'||option==='icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({content:'L Informe uma URL come�ando com `http://` ou `https://`.'});
+    if((option==='banner'||option==='icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({content:'L Informe uma URL começando com `http://` ou `https://`.'});
     rules2Config[option]=value; saveRules2Config(); await refreshRules2Panel(interaction.guild);
-    return interaction.editReply({content:`. ${option} atualizado no painel 2.`});
+    return interaction.editReply({content:`. ${option} atualizado no painel 2.`});
   } catch(e) {
     console.error('[Rules2] Erro:',e);
-    return interaction.editReply({content:'L N�o foi poss�vel atualizar o painel 2. Verifique as permiss�es do bot no canal.'});
+    return interaction.editReply({content:'L Não foi possível atualizar o painel 2. Verifique as permissões do bot no canal.'});
   }
 }
 // ==================== FIM REGRAS 2 ====================
@@ -616,7 +616,7 @@ const MATCH_CONFIG_FILE =
 
 let matchConfig = {
 
-  title: '=� Central de Match & Conex�es',
+  title: '= Central de Match & Conexes',
 
   description:
 
@@ -664,7 +664,7 @@ try {
 
   console.warn(
 
-    '[Match] Erro ao carregar configura��o:',
+    '[Match] Erro ao carregar configuração:',
 
     e.message
 
@@ -723,7 +723,7 @@ const TEMP_VOICE_CONFIG_FILE =
 let tempVoiceConfig = {
   title: 'Salas de Voz Temporárias',
   description:
-    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias s�o exclu�das automaticamente conforme o tempo configurado.',
+    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sóo excluídas automaticamente conforme o tempo configurado.',
   color: '#5865F2',
   banner: '',
   icon: '',
@@ -769,7 +769,7 @@ try {
 
   console.warn(
 
-    '[TempVoice] Erro ao carregar configura��o:',
+    '[TempVoice] Erro ao carregar configuração:',
 
     e.message
 
@@ -807,7 +807,7 @@ function saveTempVoiceConfig() {
 
     console.error(
 
-      '[TempVoice] Erro ao salvar configura��o:',
+      '[TempVoice] Erro ao salvar configuração:',
 
       e.message
 
@@ -845,7 +845,7 @@ function getTempVoiceOptionDescription(option) {
     rename: 'Altera o nome da sua sala.', lock: 'Impede novas pessoas de entrarem.',
     unlock: 'Permite novamente a entrada.', limit: 'Define o limite de pessoas na sala.',
     kick: 'Escolhe um membro para remover da sala.',
-    transfer: 'Escolhe outro membro como dono da sala.', delete: 'Exclui imediatamente sua sala tempor�ria.'
+    transfer: 'Escolhe outro membro como dono da sala.', delete: 'Exclui imediatamente sua sala temporária.'
   };
   return descriptions[option] || '';
 }
@@ -867,7 +867,7 @@ function resetTempVoiceConfig() {
   const panelMessageId = tempVoiceConfig.panelMessageId || '';
   tempVoiceConfig = {
     title: 'Salas de Voz Temporárias',
-    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias s�o exclu�das automaticamente conforme o tempo configurado.',
+    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sóo excluídas automaticamente conforme o tempo configurado.',
     color: '#5865F2', banner: '', icon: '', footer: 'Call Priv - Configuração dinâmica',
     defaultName: '🔊 {user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
     deleteAfterMinutes: 5, userLimit: 0,
@@ -891,7 +891,7 @@ try {
 
   console.warn(
 
-    '[Formulario] M�dulo n�o carregado:',
+    '[Formulario] Módulo não carregado:',
 
     e.message
 
@@ -907,13 +907,13 @@ let dmCommand;
 
 try {
 
-  dmCommand = require('./commands/dm');
+  dmCommand = require('./dm');
 
 } catch (e) {
 
   console.warn(
 
-    '[DM] M�dulo n�o carregado:',
+    '[DM] Módulo não carregado:',
 
     e.message
 
@@ -1138,7 +1138,7 @@ const DEFAULT_RANK_CALL_CONFIG = {
   messageId: null,
   page: 0,
   title: 'Ranking de Macacos <:pureza_a:1553959213045121104>',
-  description: 'Acompanhe em tempo real quem � mais desempregado',
+  description: 'Acompanhe em tempo real quem  mais desempregado',
   color: '#000000',
   icon: '',
   banner: '',
@@ -1162,7 +1162,7 @@ function loadRankCallConfig() {
       color: normalizeHexColor(data?.color || DEFAULT_RANK_CALL_CONFIG.color)
     };
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar configura��o:', e.message);
+    console.warn('[RankCall] Erro ao carregar configuração:', e.message);
   }
 }
 
@@ -1170,7 +1170,7 @@ function saveRankCallConfig() {
   try {
     fs.writeFileSync(RANK_CALL_CONFIG_FILE, JSON.stringify(rankCallConfig, null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar configura��o:', e.message);
+    console.warn('[RankCall] Erro ao salvar configuração:', e.message);
   }
 }
 
@@ -1208,7 +1208,7 @@ function loadVoiceSessionsLocal() {
       }
     }
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar sess�es ativas:', e.message);
+    console.warn('[RankCall] Erro ao carregar sessões ativas:', e.message);
   }
 }
 
@@ -1216,7 +1216,7 @@ function saveVoiceSessionsLocal() {
   try {
     fs.writeFileSync(VOICE_LIVE_SESSIONS_FILE, JSON.stringify(Object.fromEntries(voiceSessions), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar sess�es ativas:', e.message);
+    console.warn('[RankCall] Erro ao salvar sessões ativas:', e.message);
   }
 }
 
@@ -1237,9 +1237,9 @@ function loadAfkUsers() {
         activatedAt: Number(raw.activatedAt) || Date.now()
       });
     }
-    if (afkUsers.size) console.log(`[AFK] ${afkUsers.size} usu�rio(s) AFK carregado(s).`);
+    if (afkUsers.size) console.log(`[AFK] ${afkUsers.size} usuário(s) AFK carregado(s).`);
   } catch (e) {
-    console.warn('[AFK] Erro ao carregar usu�rios AFK:', e.message);
+    console.warn('[AFK] Erro ao carregar usuários AFK:', e.message);
   }
 }
 
@@ -1247,7 +1247,7 @@ function saveAfkUsers() {
   try {
     fs.writeFileSync(AFK_USERS_FILE, JSON.stringify(Object.fromEntries(afkUsers), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[AFK] Erro ao salvar usu�rios AFK:', e.message);
+    console.warn('[AFK] Erro ao salvar usuários AFK:', e.message);
   }
 }
 
@@ -1260,7 +1260,7 @@ function getAfkRecord(guildId, userId) {
 }
 
 function formatAfkNickname(originalNickname, username) {
-  const original = String(originalNickname || username || 'Usu�rio').replace(/^AFK\s*\|\s*/i, '').trim();
+  const original = String(originalNickname || username || 'Usurio').replace(/^AFK\s*\|\s*/i, '').trim();
   const value = `${AFK_NICK_PREFIX}${original}`;
   return value.length > 32 ? value.slice(0, 32) : value;
 }
@@ -1294,7 +1294,7 @@ function findAfkMention(message) {
 }
 
 async function warnAboutAfkMention(message) {
-  const warning = await message.channel.send('o cego n�o ta vendo o nome da pessoa n�o? o nome ta afk burro,').catch(() => null);
+  const warning = await message.channel.send('o cego não ta vendo o nome da pessoa não? o nome ta afk burro,').catch(() => null);
   setTimeout(() => {
     message.delete().catch(() => {});
     warning?.delete().catch(() => {});
@@ -1317,7 +1317,7 @@ async function handleAfkPrefixCommand(message) {
 
   if (command === 'afk') {
     if (afkUsers.has(key)) {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> j� est� no mundo AFK e n�o pode ser perturbado.`).catch(() => {});
+      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> já está no mundo AFK e não pode ser perturbado.`).catch(() => {});
       return true;
     }
 
@@ -1334,7 +1334,7 @@ async function handleAfkPrefixCommand(message) {
       formatAfkNickname(originalNickname, member.user.username),
       'Entrou no modo AFK'
     ).catch(error => {
-      console.warn('[AFK] N�o foi poss�vel alterar o apelido:', error.message);
+      console.warn('[AFK] Não foi possível alterar o apelido:', error.message);
     });
 
     const afkChannel = guild.channels.cache.get(AFK_VOICE_CHANNEL_ID)
@@ -1351,22 +1351,22 @@ async function handleAfkPrefixCommand(message) {
           .setStyle(ButtonStyle.Success),
         new ButtonBuilder()
           .setCustomId(`${confirmId}:no`)
-          .setLabel('N�o')
+          .setLabel('Não')
           .setStyle(ButtonStyle.Danger)
       );
 
-      // A confirma��o precisa ser privada para quem executou !afk.
-      // Prefix commands n�o suportam mensagens ephemeral, ent�o enviamos a pergunta por DM.
+      // A confirmaío precisa ser privada para quem executou !afk.
+      // Prefix commands não suportam mensagens ephemeral, ento enviamos a pergunta por DM.
       await message.channel.send(
-        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e n�o pode ser perturbado.`
+        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`
       ).catch(() => {});
 
       const prompt = await member.user.send({
-        content: `<a:luacancun2:1554021665934155796> **@${member.displayName || member.user.username}** entrou no mundo AFK e n�o pode ser perturbado.\n\n=
- Voc� quer ser movido para **${afkChannel.name}**?`,
+        content: `<a:luacancun2:1554021665934155796> **@${member.displayName || member.user.username}** entrou no mundo AFK e não pode ser perturbado.\n\n=
+ Você quer ser movido para **${afkChannel.name}**?`,
         components: [buttons]
       }).catch(error => {
-        console.warn('[AFK] N�o foi poss�vel enviar a confirma��o por DM:', error.message);
+        console.warn('[AFK] Não foi possível enviar a confirmaío por DM:', error.message);
         return null;
       });
 
@@ -1383,12 +1383,12 @@ async function handleAfkPrefixCommand(message) {
               .setDisabled(true),
             new ButtonBuilder()
               .setCustomId(`${confirmId}:no`)
-              .setLabel('N�o')
+              .setLabel('Não')
               .setStyle(ButtonStyle.Danger)
               .setDisabled(true)
           );
           await prompt.edit({
-            content: `<a:luacancun2:1554021665934155796> Voc� entrou no mundo AFK e n�o pode ser perturbado.\n\n� O tempo para escolher terminou. Voc� permaneceu na call atual.`,
+            content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e não pode ser perturbado.\n\n O tempo para escolher terminou. Você permaneceu na call atual.`,
             components: [disabled]
           }).catch(() => {});
         }, AFK_MOVE_CONFIRM_TIMEOUT_MS);
@@ -1401,7 +1401,7 @@ async function handleAfkPrefixCommand(message) {
         });
       }
     } else {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e n�o pode ser perturbado.`).catch(() => {});
+      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`).catch(() => {});
     }
 
     return true;
@@ -1409,7 +1409,7 @@ async function handleAfkPrefixCommand(message) {
 
   const record = afkUsers.get(key);
   if (!record) {
-    await message.channel.send(`. <@${member.id}>, voc� n�o est� no modo AFK.`).catch(() => {});
+    await message.channel.send(`. <@${member.id}>, você não está no modo AFK.`).catch(() => {});
     return true;
   }
 
@@ -1424,10 +1424,10 @@ async function handleAfkPrefixCommand(message) {
   saveAfkUsers();
 
   await member.setNickname(record.originalNickname ?? null, 'Saiu do modo AFK').catch(error => {
-    console.warn('[AFK] N�o foi poss�vel restaurar o apelido:', error.message);
+    console.warn('[AFK] Não foi possível restaurar o apelido:', error.message);
   });
 
-  await message.channel.send(`�~? <@${member.id}> saiu do mundo AFK e j� pode ser mencionado novamente.`).catch(() => {});
+  await message.channel.send(`~? <@${member.id}> saiu do mundo AFK e já pode ser mencionado novamente.`).catch(() => {});
   return true;
 }
 
@@ -1442,14 +1442,14 @@ async function handleAfkMoveConfirmation(interaction) {
 
   if (!pending || pending.messageId !== interaction.message.id) {
     await interaction.reply({
-      content: '� Essa confirma��o j� expirou.'
+      content: ' Essa confirmaío já expirou.'
     }).catch(() => {});
     return true;
   }
 
   if (interaction.user.id !== userId) {
     await interaction.reply({
-      content: 'L Somente a pessoa que ativou o AFK pode responder essa confirma��o.'
+      content: 'L Somente a pessoa que ativou o AFK pode responder essa confirmaío.'
     }).catch(() => {});
     return true;
   }
@@ -1461,7 +1461,7 @@ async function handleAfkMoveConfirmation(interaction) {
   const member = guild ? await guild.members.fetch(userId).catch(() => null) : null;
   if (!guild || !member) {
     await interaction.update({
-      content: '� N�o consegui localizar o servidor ou o membro.',
+      content: ' Não consegui localizar o servidor ou o membro.',
       components: []
     }).catch(() => {});
     return true;
@@ -1473,22 +1473,22 @@ async function handleAfkMoveConfirmation(interaction) {
 
     if (!afkChannel?.isVoiceBased?.()) {
       await interaction.update({
-        content: `L N�o encontrei o canal AFK <#${AFK_VOICE_CHANNEL_ID}>. Voc� permaneceu na call atual.`,
+        content: `L Não encontrei o canal AFK <#${AFK_VOICE_CHANNEL_ID}>. Você permaneceu na call atual.`,
         components: []
       }).catch(() => {});
       return true;
     }
 
     try {
-      await member.voice.setChannel(afkChannel, 'Confirma��o de entrada no modo AFK');
+      await member.voice.setChannel(afkChannel, 'Confirmaío de entrada no modo AFK');
       await interaction.update({
-        content: `<a:luacancun2:1554021665934155796> Voc� entrou no mundo AFK e foi movido para <#${AFK_VOICE_CHANNEL_ID}>. N�o pode ser perturbado.`,
+        content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e foi movido para <#${AFK_VOICE_CHANNEL_ID}>. Não pode ser perturbado.`,
         components: []
       }).catch(() => {});
     } catch (error) {
-      console.warn('[AFK] N�o foi poss�vel mover ap�s confirma��o:', error.message);
+      console.warn('[AFK] Não foi possível mover aps confirmaío:', error.message);
       await interaction.update({
-        content: `L N�o consegui mover <@${member.id}> para <#${AFK_VOICE_CHANNEL_ID}>. Verifique a permiss�o **Mover Membros**.`,
+        content: `L Não consegui mover <@${member.id}> para <#${AFK_VOICE_CHANNEL_ID}>. Verifique a permissão **Mover Membros**.`,
         components: []
       }).catch(() => {});
     }
@@ -1496,7 +1496,7 @@ async function handleAfkMoveConfirmation(interaction) {
   }
 
   await interaction.update({
-    content: `<a:luacancun2:1554021665934155796> Voc� entrou no mundo AFK e escolheu permanecer na call atual. N�o pode ser perturbado.`,
+    content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e escolheu permanecer na call atual. Não pode ser perturbado.`,
     components: []
   }).catch(() => {});
   return true;
@@ -1548,7 +1548,7 @@ function loadRankCallStreaks() {
     const data = JSON.parse(fs.readFileSync(RANK_CALL_STREAKS_FILE, 'utf8'));
     for (const [key, raw] of Object.entries(data || {})) rankCallStreaks.set(key, normalizeRankCallStreakData(raw));
   } catch (e) {
-    console.warn('[RankCall] Erro ao carregar sequ�ncias:', e.message);
+    console.warn('[RankCall] Erro ao carregar sequências:', e.message);
   }
 }
 
@@ -1556,7 +1556,7 @@ function saveRankCallStreaks() {
   try {
     fs.writeFileSync(RANK_CALL_STREAKS_FILE, JSON.stringify(Object.fromEntries(rankCallStreaks), null, 2), 'utf8');
   } catch (e) {
-    console.warn('[RankCall] Erro ao salvar sequ�ncias:', e.message);
+    console.warn('[RankCall] Erro ao salvar sequências:', e.message);
   }
 }
 
@@ -1651,8 +1651,8 @@ function addRankCallDailySeconds(guildId, userId, dateKey, seconds) {
   if (before < RANK_CALL_STREAK_MIN_SECONDS && after >= RANK_CALL_STREAK_MIN_SECONDS) {
     qualified = addRankCallQualifiedDate(record, dateKey);
   }
-  // O progresso di�rio tamb�m � persistido antes dos 30 minutos,
-  // para que um rein�cio n�o apague o que j� foi feito naquele dia.
+  // O progresso diário também  persistido antes dos 30 minutos,
+  // para que um reincio não apague o que já foi feito naquele dia.
   return qualified || after !== before;
 }
 
@@ -1678,9 +1678,9 @@ async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak
     const user = await client.users.fetch(userId);
     const guild = client.guilds.cache.get(guildId);
     const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
-    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequ�ncia do RankCall foi perdida.**\n\nVoc� tinha uma sequ�ncia de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, voc� n�o completou os **30 minutos m�nimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para come�ar uma nova sequ�ncia.`);
+    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequncia do RankCall foi perdida.**\n\nVocê tinha uma sequncia de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequncia.`);
   } catch (error) {
-    console.warn('[RankCall] N�o foi poss�vel enviar DM de sequ�ncia:', error.message);
+    console.warn('[RankCall] Não foi possível enviar DM de sequncia:', error.message);
   }
 }
 
@@ -1699,8 +1699,8 @@ async function evaluateRankCallStreaks(now = Date.now()) {
       record.dates.includes(yesterday) ||
       Number(record.dailySeconds?.[yesterday] || 0) >= RANK_CALL_STREAK_MIN_SECONDS;
 
-    // Se ontem n�o foi cumprido, a sequ�ncia atual � quebrada.
-    // Isso n�o impede que uma nova sequ�ncia seja iniciada hoje ap�s 30 min.
+    // Se ontem não foi cumprido, a sequncia atual  quebrada.
+    // Isso não impede que uma nova sequncia seja iniciada hoje aps 30 min.
     if (Number(record.currentStreak) > 0 && !yesterdayQualified && record.missedDayNotified !== yesterday) {
       const oldStreak = Number(record.currentStreak) || 0;
       record.currentStreak = 0;
@@ -1710,8 +1710,8 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     }
 
     // Ao atingir 30 min hoje, a data de hoje precisa estar qualificada.
-    // Mesmo que ela j� esteja em `dates`, recalculamos o currentStreak;
-    // isso corrige o caso em que a sequ�ncia foi zerada no in�cio do dia.
+    // Mesmo que ela já esteja em `dates`, recalculamos o currentStreak;
+    // isso corrige o caso em que a sequncia foi zerada no incio do dia.
     if (todayQualified) {
       if (!record.dates.includes(today)) {
         if (addRankCallQualifiedDate(record, today)) changed = true;
@@ -1745,19 +1745,19 @@ function getLiveRankCallStreakRanking(guild) {
     const [guildId, userId] = key.split(':');
     if (guildId !== guild.id) continue;
 
-    // A sequ�ncia s� fica ATIVA no painel depois que a pessoa
+    // A sequncia só fica ATIVA no painel depois que a pessoa
     // completar 30 minutos acumulados de call no dia atual.
     const todaySeconds = Number(streak?.dailySeconds?.[today] || 0);
     const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
 
     // Repara automaticamente o painel caso o checkpoint tenha atualizado
-    // dailySeconds mas a inclus�o da data qualificada ainda n�o tenha ocorrido.
+    // dailySeconds mas a inclusóo da data qualificada ainda não tenha ocorrido.
     if (todayQualified && !streak.dates.includes(today)) {
       addRankCallQualifiedDate(streak, today);
       changed = true;
     }
 
-    // Mant�m a sequ�ncia corrente coerente com as datas hist�ricas.
+    // Mantm a sequncia corrente coerente com as datas históricas.
     const recalculated = calculateRankCallCurrentStreak(streak.dates);
     if (Number(streak.currentStreak) !== Number(recalculated.currentStreak)) {
       streak.currentStreak = recalculated.currentStreak;
@@ -1767,9 +1767,9 @@ function getLiveRankCallStreakRanking(guild) {
 
     const currentStreak = Number(streak.currentStreak) || 0;
 
-    // N�o exibe a sequ�ncia como ativa antes dos 30 minutos do dia.
-    // O hist�rico continua salvo normalmente; ao completar 30 min,
-    // a data de hoje � adicionada e a sequ�ncia volta a aparecer.
+    // Não exibe a sequncia como ativa antes dos 30 minutos do dia.
+    // O histórico continua salvo normalmente; ao completar 30 min,
+    // a data de hoje  adicionada e a sequncia volta a aparecer.
     if (currentStreak > 0) {
       rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
     }
@@ -1915,7 +1915,7 @@ const PERMISSIONS = [
 ];
 
 
-// Permiss�es locais: funcionam mesmo sem DATABASE_URL.
+// Permissões locais: funcionam mesmo sem DATABASE_URL.
 const LOCAL_PERMISSIONS_FILE =
   path.join(__dirname, 'permissions-local.json');
 
@@ -1938,7 +1938,7 @@ function loadLocalPermissions() {
         : {};
   } catch (e) {
     console.warn(
-      '[Permiss�es] Erro ao carregar permiss�es locais:',
+      '[Permissões] Erro ao carregar permissões locais:',
       e.message
     );
     localPermissions = {};
@@ -1955,7 +1955,7 @@ function saveLocalPermissions() {
     return true;
   } catch (e) {
     console.error(
-      '[Permiss�es] Erro ao salvar permiss�es locais:',
+      '[Permissões] Erro ao salvar permissões locais:',
       e.message
     );
     return false;
@@ -2143,7 +2143,7 @@ async function initDB() {
 
     console.warn(
 
-      '[DB] DATABASE_URL n�o configurada. Recursos de banco ficam em modo local/in-memory.'
+      '[DB] DATABASE_URL não configurada. Recursos de banco ficam em modo local/in-memory.'
 
     );
 
@@ -2500,12 +2500,12 @@ async function restoreRankCallVoiceSessionsFromDB() {
 
     if (restored > 0 || removed > 0) {
       console.log(
-        `[RankCall] ${restored} sess�o(�es) restaurada(s) e ${removed} sess�o(�es) antiga(s) removida(s).`
+        `[RankCall] ${restored} sessóo(es) restaurada(s) e ${removed} sessóo(es) antiga(s) removida(s).`
       );
     }
   } catch (error) {
     console.warn(
-      '[RankCall] Erro ao restaurar sess�es do PostgreSQL:',
+      '[RankCall] Erro ao restaurar sessões do PostgreSQL:',
       error.message
     );
   }
@@ -3028,7 +3028,7 @@ async function askAI(
 
     throw new Error(
 
-      'OPENAI_API_KEY n�o configurada.'
+      'OPENAI_API_KEY não configurada.'
 
     );
 
@@ -3082,7 +3082,7 @@ async function askAI(
 
               content:
 
-                `Responda em portugu�s brasileiro, de forma clara, objetiva e educada. ${systemExtra}`
+                `Responda em portugus brasileiro, de forma clara, objetiva e educada. ${systemExtra}`
 
             },
 
@@ -3182,7 +3182,7 @@ async function askAIWithRules(
 
           .join('\n')}`
 
-      : 'N�o h� regras cadastradas no banco.';
+      : 'Não h regras cadastradas no banco.';
 
 
 
@@ -3190,7 +3190,7 @@ async function askAIWithRules(
 
     prompt,
 
-    `Quando a pergunta for sobre regras do servidor, use somente as regras fornecidas abaixo. N�o invente regras.\n${context}`
+    `Quando a pergunta for sobre regras do servidor, use somente as regras fornecidas abaixo. Não invente regras.\n${context}`
 
   );
 
@@ -3884,13 +3884,13 @@ function buildRankCallRow(guild, row, index) {
 
   const userMention = `${LRI}<@${row.userId}>${PDI}`;
   const callLabel = channel
-    ? `${isCallPriv ? '� ' : ''}<#${channel.id}>${ownerId === row.userId ? ' 👑 Dono' : ''}`
+    ? `${isCallPriv ? '🔒 ' : ''}<#${channel.id}>${ownerId === row.userId ? ' 👑 Dono' : ''}`
     : '<a:Loading:1554696306633482252> Fora de call';
   const audioIcon = channel ? '<:audio_larp:1554688509715939350> ' : '';
 
   return [
     `**${LRI}${index + 1}.${PDI}** ${userMention}`,
-    `�.� <:arrow1:1554152798071955477> <a:oceans6_clock:1554152778300002346> **${formatVoiceDuration(row.seconds)}** � ${audioIcon}${callLabel}`
+    `↪ <:arrow1:1554152798071955477> <a:oceans6_clock:1554152778300002346> **${formatVoiceDuration(row.seconds)}** • ${audioIcon}${callLabel}`
   ].join('\n');
 }
 
@@ -3909,7 +3909,7 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
     title: String(rankCallConfig.title || DEFAULT_RANK_CALL_CONFIG.title).slice(0, 256),
     description: [String(rankCallConfig.description || '').trim(), description].filter(Boolean).join('\n\n'),
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `Ranking de horas � P�gina ${safePage + 1}/${totalPages} � Atualiza a cada 5 segundos � ${guild.name}`
+    footer: `Ranking de horas • Página ${safePage + 1}/${totalPages} • Atualiza a cada 5 segundos  ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
@@ -3952,23 +3952,23 @@ return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
     .join('\n');
 
   const embed = createEmbed({
-    title: '�Y'o Rank de Call - Top 10',
+    title: '🐒 Rank de Call - Top 10',
     description: [
-      `Sua posi��o #${userPosition} na p�gina ${safePage}`,
+      `Sua posição #${userPosition} na página ${safePage}`,
       '',
-      '�Y'o **Top 3**',
+      '🐒 **Top 3**',
       '',
-      topThree || 'Nenhum usu�rio possui horas registradas em call.',
+      topThree || 'Nenhum usuário possui horas registradas em call.',
       '',
       rows.length > 3
         ? rows.slice(3).map((row, index) => {
             const position = start + index + 4;
-            return `**${position}.** <@${row.userId}> � ${formatVoiceDuration(row.seconds)}`;
+            return `**${position}.** <@${row.userId}>  ${formatVoiceDuration(row.seconds)}`;
           }).join('\n')
         : ''
     ].filter(Boolean).join('\n'),
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `Ranking - P�gina ${safePage + 1} de ${totalPages} � ${guild.name}`
+    footer: `Ranking - Pgina ${safePage + 1} de ${totalPages}  ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) {
@@ -3983,7 +3983,7 @@ return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
     new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId(`rankcall_general_prev_${safePage}`)
-        .setLabel('�-?')
+        .setLabel('-?')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(safePage <= 0),
 
@@ -3995,13 +3995,13 @@ return `${prefix} <@${row.userId}> ⏱️ **${duration}**`;
 
       new ButtonBuilder()
         .setCustomId(`rankcall_general_next_${safePage}`)
-        .setLabel('�-�')
+        .setLabel('-')
         .setStyle(ButtonStyle.Primary)
         .setDisabled(safePage >= totalPages - 1),
 
       new ButtonBuilder()
         .setCustomId('rankcall_general_id')
-        .setLabel('�Y"Z ID')
+        .setLabel('Y"Z ID')
         .setStyle(ButtonStyle.Secondary)
     )
   ];
@@ -4024,15 +4024,15 @@ function buildRankCallStreakEmbed(guild, page = 0) {
 
   const description = rows.length
     ? rows.map((row, index) =>
-        `**${start + index + 1}.** <@${row.userId}> �" ${RANK_CALL_STREAK_EMOJI} **Sequ�ncia: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**`
+        `**${start + index + 1}.** <@${row.userId}> • ${RANK_CALL_STREAK_EMOJI} **Sequência: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**`
       ).join('\n')
-    : `${RANK_CALL_STREAK_EMOJI} Nenhum usu�rio possui uma sequ�ncia ativa no momento.`;
+    : `${RANK_CALL_STREAK_EMOJI} Nenhum usuário possui uma sequência ativa no momento.`;
 
   const embed = createEmbed({
-    title: `${RANK_CALL_STREAK_EMOJI} Sequ�ncia de dias em Call`,
+    title: `${RANK_CALL_STREAK_EMOJI} Sequência de dias em Call`,
     description,
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `30 minutos acumulados em call por dia � Dias hist�ricos salvos � P�gina ${safePage + 1}/${totalPages} � ${guild.name}`
+    footer: `30 minutos acumulados em call por dia • Dias históricos salvos • Página ${safePage + 1}/${totalPages}  ${guild.name}`
   });
 
   if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
@@ -4114,7 +4114,7 @@ async function findExistingRankCallPanel(channel) {
     for (const message of messages.values()) {
       if (message.author?.id === botId && message.embeds?.length) {
         console.log(
-          `[RankCall] DEBUG mensagem ${message.id} | t�tulo="${message.embeds[0]?.title || ''}" | footer="${message.embeds[0]?.footer?.text || ''}"`
+          `[RankCall] DEBUG mensagem ${message.id} | ttulo="${message.embeds[0]?.title || ''}" | footer="${message.embeds[0]?.footer?.text || ''}"`
         );
       }
     }
@@ -4141,19 +4141,19 @@ async function findExistingRankCallPanel(channel) {
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
     console.log(
-      `[RankCall] Pain�is encontrados no canal: ${candidates.length} | IDs: ${candidates.map(m => m.id).join(', ')}`
+      `[RankCall] Painis encontrados no canal: ${candidates.length} | IDs: ${candidates.map(m => m.id).join(', ')}`
     );
 
     const panel = candidates[0] || null;
 
-    // Se existirem v�rios pain�is antigos, mant�m somente o mais recente.
+    // Se existirem vrios painis antigos, mantém somente o mais recente.
     for (const duplicate of candidates.slice(1)) {
       try {
         await duplicate.delete();
         console.log(`[RankCall] Painel duplicado removido: ${duplicate.id}`);
       } catch (error) {
         console.error(
-          `[RankCall] N foi poss�vel remover painel duplicado ${duplicate.id}:`,
+          `[RankCall] N foi possível remover painel duplicado ${duplicate.id}:`,
           error?.message || error
         );
       }
@@ -4162,7 +4162,7 @@ async function findExistingRankCallPanel(channel) {
     return panel;
   } catch (error) {
     console.warn(
-      '[RankCall] N foi poss�vel procurar painel existente:',
+      '[RankCall] N foi possível procurar painel existente:',
       error.message
     );
     return null;
@@ -4188,12 +4188,12 @@ async function publishRankCallPanel(
 
   if (!channel || !channel.isTextBased()) {
     throw new Error(
-      `Canal RankCall ${RANK_CALL_CHANNEL_ID} n encontrado ou n � de texto.`
+      `Canal RankCall ${RANK_CALL_CHANNEL_ID} n encontrado ou n  de texto.`
     );
   }
 
-  // Usa somente a refer�ncia em mem�ria.
-  // Nenhum messageId � salvo no arquivo.
+  // Usa somente a referncia em memria.
+  // Nenhum messageId  salvo no arquivo.
   let panel = rankCallPanelMessage;
 
   if (recreate && panel) {
@@ -4202,7 +4202,7 @@ async function publishRankCallPanel(
       console.log(`[RankCall] Painel anterior removido: ${panel.id}`);
     } catch (error) {
       console.error(
-        '[RankCall] N foi poss�vel remover o painel anterior:',
+        '[RankCall] N foi possível remover o painel anterior:',
         error?.message || error
       );
     }
@@ -4211,8 +4211,8 @@ async function publishRankCallPanel(
     panel = null;
   }
 
-  // S� procura um painel existente quando ainda n temos
-  // um painel guardado em mem�ria.
+  // S procura um painel existente quando ainda n temos
+  // um painel guardado em memria.
   if (!panel) {
     panel = await findExistingRankCallPanel(channel);
   }
@@ -4257,9 +4257,9 @@ async function publishRankCallPanel(
       await panel.edit(payload);
     } catch (error) {
       // A mensagem pode ter sido apagada manualmente.
-      // Limpa somente a refer�ncia em mem�ria e recria uma vez.
+      // Limpa somente a referncia em memria e recria uma vez.
       if (error?.code === 10008) {
-        console.warn('[RankCall] Painel n existe mais. Criando um novo painel.');
+        console.warn('[RankCall] Painel n existe mais. Criando um novo painel.');
 
         rankCallPanelMessage = null;
         panel = await channel.send(payload);
@@ -4274,8 +4274,8 @@ async function publishRankCallPanel(
     console.log(`[RankCall] Novo painel criado: ${panel.id}`);
   }
 
-  // Guarda somente em mem�ria durante esta execu�.
-  // Nenhum messageId � salvo no arquivo.
+  // Guarda somente em memria durante esta execu.
+  // Nenhum messageId  salvo no arquivo.
   rankCallPanelMessage = panel;
   liveRankPanels.set(panel.id, {
     guildId: guild.id,
@@ -4286,31 +4286,31 @@ async function publishRankCallPanel(
 }
 function buildRankCallConfigEmbed() {
   return createEmbed({
-    title: '� Configura��o do RankCall',
-    description: 'Use os bot�es abaixo para personalizar o painel de ranking. O ranking n�o possui limite de usu�rios; quando necess�rio, usa p�ginas de 10 pessoas.',
+    title: ' Configuraío do RankCall',
+    description: 'Use os botes abaixo para personalizar o painel de ranking. O ranking não possui limite de usuários; quando necessório, usa páginas de 10 pessoas.',
     color: normalizeHexColor(rankCallConfig.color),
     fields: [
-      { name: 'T�tulo', value: String(rankCallConfig.title || '�"').slice(0, 1024) },
-      { name: 'Descri��o', value: String(rankCallConfig.description || '�"').slice(0, 1024) },
-      { name: 'Cor', value: String(rankCallConfig.color || '�"'), inline: true },
-      { name: '�cone', value: rankCallConfig.icon ? 'Configurado' : 'N�o configurado', inline: true },
-      { name: 'Banner', value: rankCallConfig.banner ? 'Configurado' : 'N�o configurado', inline: true }
+      { name: 'Título', value: String(rankCallConfig.title || '"').slice(0, 1024) },
+      { name: 'Descrição', value: String(rankCallConfig.description || '"').slice(0, 1024) },
+      { name: 'Cor', value: String(rankCallConfig.color || '"'), inline: true },
+      { name: 'ícone', value: rankCallConfig.icon ? 'Configurado' : 'Não configurado', inline: true },
+      { name: 'Banner', value: rankCallConfig.banner ? 'Configurado' : 'Não configurado', inline: true }
     ],
-    footer: 'RankCall � somente administradores'
+    footer: 'RankCall  somente administradores'
   });
 }
 
 function buildRankCallConfigComponents() {
   return [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rankconfig_title').setLabel('T�tulo').setEmoji('').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('rankconfig_description').setLabel('Descri��o').setEmoji('=�').setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId('rankconfig_color').setLabel('Cor').setEmoji('<�').setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId('rankconfig_title').setLabel('Título').setEmoji('').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('rankconfig_description').setLabel('Descrição').setEmoji('=').setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId('rankconfig_color').setLabel('Cor').setEmoji('<').setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('rankconfig_icon').setLabel('�cone').setEmoji('=�').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rankconfig_banner').setLabel('Banner').setEmoji('�YO"').setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId('rankconfig_reset').setLabel('Restaurar').setEmoji('=').setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId('rankconfig_icon').setLabel('ícone').setEmoji('=').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rankconfig_banner').setLabel('Banner').setEmoji('YO"').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('rankconfig_reset').setLabel('Restaurar').setEmoji('=').setStyle(ButtonStyle.Danger)
     )
   ];
 }
@@ -4320,7 +4320,7 @@ async function sendRankCallConfigPanel(guild) {
 
   console.log(
   );
-  if (!channel?.isTextBased()) throw new Error('Canal do RankCall n�o encontrado.');
+  if (!channel?.isTextBased()) throw new Error('Canal do RankCall não encontrado.');
   const message = await channel.send({
     embeds: [buildRankCallConfigEmbed()],
     components: buildRankCallConfigComponents()
@@ -4330,15 +4330,15 @@ async function sendRankCallConfigPanel(guild) {
 
 function openRankCallConfigModal(interaction, option) {
   const labels = {
-    title: 'T�tulo do painel',
-    description: 'Descri��o do painel',
+    title: 'Título do painel',
+    description: 'Descrição do painel',
     color: 'Cor HEX (#RRGGBB)',
-    icon: 'URL do �cone',
+    icon: 'URL do ícone',
     banner: 'URL do banner'
   };
   const placeholders = {
-    title: '�Y� Ranking de Horas em Call',
-    description: 'Acompanhe em tempo real quem � mais desempregado',
+    title: 'Y Ranking de Horas em Call',
+    description: 'Acompanhe em tempo real quem  mais desempregado',
     color: '#000000',
     icon: 'https://...',
     banner: 'https://...'
@@ -4350,7 +4350,7 @@ function openRankCallConfigModal(interaction, option) {
     icon: String(rankCallConfig.icon || ''),
     banner: String(rankCallConfig.banner || '')
   };
-  const modal = new ModalBuilder().setCustomId(`rankconfig_modal:${option}`).setTitle(`� ${labels[option]}`);
+  const modal = new ModalBuilder().setCustomId(`rankconfig_modal:${option}`).setTitle(` ${labels[option]}`);
   const input = new TextInputBuilder()
     .setCustomId('value')
     .setLabel(labels[option])
@@ -4365,7 +4365,7 @@ function openRankCallConfigModal(interaction, option) {
 
 async function handleRankCallConfigModal(interaction) {
   if (!isTempVoicePanelAdmin(interaction.member)) {
-    return interaction.reply({ content: 'L Voc� n�o possui permiss�o para configurar o RankCall.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'L Você não possui permissão para configurar o RankCall.', flags: MessageFlags.Ephemeral });
   }
 
   const option = interaction.customId.split(':')[1];
@@ -4375,19 +4375,19 @@ async function handleRankCallConfigModal(interaction) {
     return interaction.reply({ content: 'L A cor deve estar no formato #RRGGBB.', flags: MessageFlags.Ephemeral });
   }
   if ((option === 'icon' || option === 'banner') && value && !/^https?:\/\//i.test(value)) {
-    return interaction.reply({ content: 'L Informe uma URL come�ando com http:// ou https://.', flags: MessageFlags.Ephemeral });
+    return interaction.reply({ content: 'L Informe uma URL começando com http:// ou https://.', flags: MessageFlags.Ephemeral });
   }
 
   rankCallConfig[option] = option === 'color' ? (value || DEFAULT_RANK_CALL_CONFIG.color) : value;
   saveRankCallConfig();
   saveRankCallBackup(`config-${option}`);
-  await interaction.reply({ content: `. ${option === 'title' ? 'T�tulo' : option === 'description' ? 'Descri��o' : option === 'color' ? 'Cor' : option === 'icon' ? '�cone' : 'Banner'} atualizado.`, flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: `. ${option === 'title' ? 'Título' : option === 'description' ? 'Descrição' : option === 'color' ? 'Cor' : option === 'icon' ? 'ícone' : 'Banner'} atualizado.`, flags: MessageFlags.Ephemeral });
   await refreshRankCallPanel();
 }
 
 async function handleRankCallConfigButton(interaction) {
   if (!isTempVoicePanelAdmin(interaction.member)) {
-    await interaction.reply({ content: 'L Voc� n�o possui permiss�o para configurar o RankCall.', flags: MessageFlags.Ephemeral }).catch(() => {});
+    await interaction.reply({ content: 'L Você não possui permissão para configurar o RankCall.', flags: MessageFlags.Ephemeral }).catch(() => {});
     return true;
   }
 
@@ -4418,8 +4418,8 @@ async function refreshRankCallPanel() {
   rankCallRefreshInProgress = true;
 
   try {
-    // Primeiro sincroniza quem est� realmente em voz e transforma o tempo
-    // acumulado desde o �ltimo checkpoint em horas persistentes.
+    // Primeiro sincroniza quem está realmente em voz e transforma o tempo
+    // acumulado desde o ltimo checkpoint em horas persistentes.
     syncRankCallVoiceSessionsFromVoiceStates();
     checkpointLocalVoiceSessions();
     await syncRankCallStreaksFromVoiceStates();
@@ -4430,19 +4430,19 @@ async function refreshRankCallPanel() {
   );
     if (!channel?.isTextBased() || !channel.guild) return;
 
-    // O painel � persistente, mas a mensagem pode ter sido apagada manualmente.
-    // Nesse caso o bot recria automaticamente uma �nica mensagem e grava o novo ID.
+    // O painel  persistente, mas a mensagem pode ter sido apagada manualmente.
+    // Nesse caso o bot recria automaticamente uma nica mensagem e grava o novo ID.
     await publishRankCallPanel(channel.guild, {
       page: rankCallConfig.page || 0,
       streakPage: rankCallConfig.streakPage || 0
     });
 
-    // Log leve para confirmar no console que o rel�gio do RankCall continua
+    // Log leve para confirmar no console que o relgio do RankCall continua
     // sendo processado, sem inundar o terminal.
     const active = [...voiceSessions.values()].length;
-    console.log(`[RankCall] Heartbeat OK � ${active} sess�o(�es) ativas � ${new Date().toLocaleTimeString('pt-BR')}`);
+    console.log(`[RankCall] Heartbeat OK  ${active} sessóo(es) ativas  ${new Date().toLocaleTimeString('pt-BR')}`);
   } catch (error) {
-    console.error('[RankCall] Atualiza��o autom�tica:', error.message);
+    console.error('[RankCall] Atualizaío automtica:', error.message);
   } finally {
     rankCallRefreshInProgress = false;
   }
@@ -4457,7 +4457,7 @@ function startRankCallAutoRefresh() {
     void refreshRankCallPanel();
   }, 5000);
 
-  console.log('[RankCall] Atualiza��o autom�tica a cada 5 segundos ativada.');
+  console.log('[RankCall] Atualizaío automtica a cada 5 segundos ativada.');
 }
 
 async function handleRankCallPrefixCommand(message) {
@@ -4477,7 +4477,7 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     if (!isTempVoicePanelAdmin(message.member)) {
-      await message.channel.send('L Voc� n�o possui permiss�o para administrar o RankCall.').catch(() => {});
+      await message.channel.send('L Você não possui permissão para administrar o RankCall.').catch(() => {});
       return true;
     }
 
@@ -4504,7 +4504,7 @@ async function handleRankCallPrefixCommand(message) {
       saveVoiceSessionsLocal();
       saveRankCallBackup('rankresetall');
       await refreshRankCallPanel();
-      await message.channel.send('. Todas as horas de call deste servidor foram zeradas. As sequ�ncias de dias continuam salvas.').catch(() => {});
+      await message.channel.send('. Todas as horas de call deste servidor foram zeradas. As sequências de dias continuam salvas.').catch(() => {});
       return true;
     }
 
@@ -4520,7 +4520,7 @@ async function handleRankCallPrefixCommand(message) {
     const hours = Number.parseFloat(String(rawHours || '0').replace(',', '.'));
 
     if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0)) {
-      await message.channel.send('L Informe uma quantidade de horas v�lida.').catch(() => {});
+      await message.channel.send('L Informe uma quantidade de horas vlida.').catch(() => {});
       return true;
     }
 
@@ -4539,7 +4539,7 @@ async function handleRankCallPrefixCommand(message) {
     saveVoiceHoursLocal();
     saveRankCallBackup(command);
     await refreshRankCallPanel();
-    await message.channel.send(`. Horas de <@${target.id}> atualizadas no RankCall. As sequ�ncias de dias permanecem salvas.`).catch(() => {});
+    await message.channel.send(`. Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
     return true;
   } catch (error) {
     console.error('[RankCall]', error);
@@ -4872,7 +4872,7 @@ async function buildDashboardEmbed(
 
                   : `Canal ${item.channel_id}`
 
-              } �" ${
+              } " ${
 
                 item.message_count
 
@@ -4892,12 +4892,11 @@ async function buildDashboardEmbed(
 
     title:
 
-      '=
- Painel de Estat�sticas',
+      '📊 Painel de Estatísticas',
 
     description:
 
-      'Estat�sticas atualizadas do servidor.',
+      'Estatísticas atualizadas do servidor.',
 
     color: '#5865F2',
 
@@ -4907,11 +4906,11 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '�Y�- BOT',
+        name: '🤖 BOT',
 
         value:
 
-          '�YY� ONLINE',
+          'YY ONLINE',
 
         inline: true
 
@@ -4939,7 +4938,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '�YY� Online',
+        name: 'YY Online',
 
         value:
 
@@ -4957,7 +4956,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '<� Tickets',
+        name: '< Tickets',
 
         value:
 
@@ -4975,7 +4974,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '=� Matches',
+        name: '= Matches',
 
         value:
 
@@ -4993,8 +4992,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '=
- Em call',
+        name: '🔊 Em call',
 
         value:
 
@@ -5032,7 +5030,7 @@ async function buildDashboardEmbed(
 
         name:
 
-          '�Y"^ Canais mais utilizados',
+          'Y"^ Canais mais utilizados',
 
         value:
 
@@ -5046,7 +5044,7 @@ async function buildDashboardEmbed(
 
     footer:
 
-      'Atualiza��o em tempo real'
+      'Atualizaío em tempo real'
 
   });
 
@@ -5488,7 +5486,7 @@ async function verifyMember(
 
       reason:
 
-        'Nenhum c�digo de verifica��o encontrado.'
+        'Nenhum código de verificação encontrado.'
 
     };
 
@@ -5522,7 +5520,7 @@ async function verifyMember(
 
       reason:
 
-        'O c�digo expirou. Gere outro c�digo.'
+        'O código expirou. Gere outro código.'
 
     };
 
@@ -5552,7 +5550,7 @@ async function verifyMember(
 
       reason:
 
-        'C�digo incorreto.'
+        'Código incorreto.'
 
     };
 
@@ -5728,7 +5726,7 @@ async function verifyMember(
 
         content:
 
-          `� ${message.author}, sua mensagem foi removida por conter uma palavra bloqueada.`
+          ` ${message.author}, sua mensagem foi removida por conter uma palavra bloqueada.`
 
       })
 
@@ -5758,7 +5756,7 @@ async function verifyMember(
 
       content:
 
-        `� Sua mensagem no servidor **${message.guild.name}** foi removida porque cont�m uma palavra que est� na lista de bloqueio.`
+        ` Sua mensagem no servidor **${message.guild.name}** foi removida porque contm uma palavra que está na lista de bloqueio.`
 
     });
 
@@ -5770,7 +5768,7 @@ async function verifyMember(
 
     message.guild,
 
-    `� **Palavra bloqueada**\nUsu�rio: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
+    ` **Palavra bloqueada**\nUsurio: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
 
   );
 
@@ -5868,7 +5866,7 @@ async function detectAttention(
 
       await askAI(
 
-        `Analise esta mensagem de Discord e determine se ela parece exigir aten��o da equipe de staff.
+        `Analise esta mensagem de Discord e determine se ela parece exigir atenção da equipe de staff.
 
 
 
@@ -5892,9 +5890,9 @@ Responda SOMENTE neste formato JSON:
 
 
 
-N�o considere simplesmente cr�ticas, opini�es ou discuss�es normais como motivo para interven��o.`,
+Não considere simplesmente crticas, opinies ou discussóes normais como motivo para interveno.`,
 
-        'Voc� � um detector de mensagens que podem precisar de aten��o humana. Voc� n�o pune ningu�m e n�o deve inventar contexto.'
+        'Você  um detector de mensagens que podem precisar de atenção humana. Você não pune ningum e não deve inventar contexto.'
 
       );
 
@@ -5942,7 +5940,7 @@ N�o considere simplesmente cr�ticas, opini�es ou discuss�es normais como
 
       message.guild,
 
-      `� **Aten��o da IA**\nUsu�rio: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma poss�vel necessidade de aten��o.'}\n\n> ${content.slice(0, 1000)}`
+      ` **Ateno da IA**\nUsurio: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma possível necessidade de atenção.'}\n\n> ${content.slice(0, 1000)}`
 
     );
 
@@ -6122,7 +6120,7 @@ async function handleSpam(
 
         60 * 1000,
 
-        'Anti-spam autom�tico'
+        'Anti-spam automtico'
 
       );
 
@@ -6138,7 +6136,7 @@ async function handleSpam(
 
         'timeout',
 
-        'Anti-spam autom�tico'
+        'Anti-spam automtico'
 
       );
 
@@ -6148,7 +6146,7 @@ async function handleSpam(
 
         message.guild,
 
-        `� **Anti-spam**\n${message.author} recebeu timeout de 1 minuto.`
+        ` **Anti-spam**\n${message.author} recebeu timeout de 1 minuto.`
 
       );
 
@@ -6186,11 +6184,11 @@ async function sendVerificationPanel(
 
       title:
 
-        '. Verifica��o',
+        '. Verificaío',
 
       description:
 
-        'Clique no bot�o abaixo para receber um c�digo de verifica��o por DM.',
+        'Clique no boto abaixo para receber um código de verificação por DM.',
 
       color: '#57F287'
 
@@ -6212,7 +6210,7 @@ async function sendVerificationPanel(
 
         .setLabel(
 
-          '=� Verificar'
+          '= Verificar'
 
         )
 
@@ -6276,7 +6274,7 @@ async function sendVerificationCode(
 
       content:
 
-        `=� **C�digo de verifica��o**\n\nSeu c�digo para o servidor **${interaction.guild.name}** �:\n\n**${result.code}**\n\nEste c�digo expira em 10 minutos.`
+        `= **Código de verificação**\n\nSeu código para o servidor **${interaction.guild.name}** :\n\n**${result.code}**\n\nEste código expira em 10 minutos.`
 
     });
 
@@ -6286,7 +6284,7 @@ async function sendVerificationCode(
 
       content:
 
-        '. O c�digo foi enviado para sua DM. Clique em **Inserir c�digo** para finalizar.',
+        '. O código foi enviado para sua DM. Clique em **Inserir código** para finalizar.',
 
       ephemeral: true,
 
@@ -6306,7 +6304,7 @@ async function sendVerificationCode(
 
               .setLabel(
 
-                '=� Inserir c�digo'
+                '= Inserir código'
 
               )
 
@@ -6328,7 +6326,7 @@ async function sendVerificationCode(
 
       content:
 
-        'L N�o consegui enviar DM. Ative as mensagens diretas para membros do servidor e tente novamente.',
+        'L Não consegui enviar DM. Ative as mensagens diretas para membros do servidor e tente novamente.',
 
       ephemeral: true
 
@@ -6358,7 +6356,7 @@ async function showVerificationModal(
 
       .setTitle(
 
-        'C�digo de verifica��o'
+        'Código de verificação'
 
       );
 
@@ -6376,7 +6374,7 @@ async function showVerificationModal(
 
       .setLabel(
 
-        'Digite o c�digo recebido'
+        'Digite o código recebido'
 
       )
 
@@ -6476,7 +6474,7 @@ async function handleVerificationModal(
 
     content:
 
-      '. Verifica��o conclu�da com sucesso!',
+      '. Verificaío concluda com sucesso!',
 
     ephemeral: true
 
@@ -6488,7 +6486,7 @@ async function handleVerificationModal(
 
     interaction.guild,
 
-    `. ${interaction.user} concluiu a verifica��o.`
+    `. ${interaction.user} concluiu a verificação.`
 
   );
 
@@ -6581,8 +6579,7 @@ async function createTempVoiceRoom(
 
       name:
 
-        String(tempVoiceConfig.defaultName || '=
-=�{user}')
+        String(tempVoiceConfig.defaultName || '🔊 {user}')
           .replace(/\{user\}/gi, member.user.username)
           .replace(/\{display\}/gi, member.displayName || member.user.username)
           .slice(0, 100),
@@ -6673,14 +6670,14 @@ async function createTempVoiceRoom(
 function detectTempVoiceOwner(channel) {
   if (!channel?.guild) return null;
 
-  // Primeiro tenta a informa��o persistida em temp-voice-rooms.json.
+  // Primeiro tenta a informação persistida em temp-voice-rooms.json.
   const saved = tempRooms.get(channel.id);
   if (saved?.ownerId) {
     return saved.ownerId;
   }
 
   // Fallback para salas antigas: o dono recebe explicitamente
-  // ManageChannels + MoveMembers na cria��o.
+  // ManageChannels + MoveMembers na criação.
   const ownerOverwrite =
     channel.permissionOverwrites?.cache?.find(overwrite => {
       if (overwrite.type !== 1) return false;
@@ -6817,7 +6814,7 @@ async function deleteTempRoom(
 
       .delete(
 
-        'Sala tempor�ria vazia'
+        'Sala temporária vazia'
 
       )
 
@@ -7082,7 +7079,7 @@ function syncRankCallVoiceSessionsFromVoiceStates() {
 
       const key = `${guild.id}:${userId}`;
       if (!voiceSessions.has(key)) {
-        // Recupera sess�es que j� estavam em call quando o bot terminou de conectar
+        // Recupera sessões que já estavam em call quando o bot terminou de conectar
         // ou quando um VoiceStateUpdate foi perdido temporariamente.
         voiceSessions.set(key, Date.now());
         changed = true;
@@ -7348,7 +7345,7 @@ if (
 
     content:
 
-      `. Sua sala foi criada: ${channel}`,
+      `. Sua sala foi criada: ${channel}`,
 
     ephemeral: true
 
@@ -7396,7 +7393,7 @@ async function renameTempRoom(
 
       content:
 
-        'L Voc� precisa estar em uma sala tempor�ria.',
+        'L Você precisa estar em uma sala temporária.',
 
       ephemeral: true
 
@@ -7418,7 +7415,7 @@ async function renameTempRoom(
 
       content:
 
-        'L Esta n�o � uma sala tempor�ria.',
+        'L Esta não  uma sala temporária.',
 
       ephemeral: true
 
@@ -7544,7 +7541,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        'L Sala n�o encontrada.',
+        'L Sala não encontrada.',
 
       ephemeral: true
 
@@ -7574,7 +7571,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        'L Voc� n�o � o dono desta sala.',
+        'L Você não  o dono desta sala.',
 
       ephemeral: true
 
@@ -7604,7 +7601,7 @@ async function handleTempVoiceModal(
 
       content:
 
-        'L Informe um nome v�lido.',
+        'L Informe um nome vlido.',
 
       ephemeral: true
 
@@ -7626,7 +7623,7 @@ async function handleTempVoiceModal(
 
     content:
 
-      `. Nome alterado para **${name}**.`,
+      `. Nome alterado para **${name}**.`,
 
     ephemeral: true
 
@@ -7658,7 +7655,7 @@ async function tempVoiceControl(
 
       content:
 
-        'L Voc� precisa estar em uma sala tempor�ria.',
+        'L Você precisa estar em uma sala temporária.',
 
       ephemeral: true
 
@@ -7680,7 +7677,7 @@ async function tempVoiceControl(
 
       content:
 
-        'L Esta n�o � uma sala tempor�ria.',
+        'L Esta não  uma sala temporária.',
 
       ephemeral: true
 
@@ -7736,7 +7733,7 @@ async function tempVoiceControl(
 
           content:
 
-            'L O bot n�o tem permiss�o para alterar as permiss�es desta sala. D� ao cargo do bot a permiss�o **Gerenciar canais** e verifique se a categoria n�o possui uma nega��o dessa permiss�o.',
+            'L O bot não tem permissão para alterar as permissões desta sala. Dê ao cargo do bot a permissão **Gerenciar canais** e verifique se a categoria não possui uma negaío dessa permissão.',
 
           ephemeral: true
 
@@ -7752,7 +7749,7 @@ async function tempVoiceControl(
 
       content:
 
-        '�Y"' Sala bloqueada.',
+        '🔒 Sala bloqueada.',
 
       ephemeral: true
 
@@ -7786,7 +7783,7 @@ async function tempVoiceControl(
 
           content:
 
-            'L O bot n�o tem permiss�o para alterar as permiss�es desta sala. D� ao cargo do bot a permiss�o **Gerenciar canais** e verifique se a categoria n�o possui uma nega��o dessa permiss�o.',
+            'L O bot não tem permissão para alterar as permissões desta sala. Dê ao cargo do bot a permissão **Gerenciar canais** e verifique se a categoria não possui uma negaío dessa permissão.',
 
           ephemeral: true
 
@@ -7802,7 +7799,7 @@ async function tempVoiceControl(
 
       content:
 
-        '�Y"" Sala desbloqueada.',
+        'Y"" Sala desbloqueada.',
 
       ephemeral: true
 
@@ -7828,7 +7825,7 @@ async function tempVoiceControl(
 
       content:
 
-        '�Y-' Sala exclu�da.',
+        '🗑️ Sala excluída.',
 
       ephemeral: true
 
@@ -7852,7 +7849,7 @@ async function tempVoiceControl(
 
         .setTitle(
 
-          'Limite de usu�rios'
+          'Limite de usuários'
 
         );
 
@@ -7870,7 +7867,7 @@ async function tempVoiceControl(
 
         .setLabel(
 
-          'Quantidade de usu�rios'
+          'Quantidade de usuários'
 
         )
 
@@ -7962,7 +7959,7 @@ async function tempVoiceControl(
 
         content:
 
-          'L N�o h� outros usu�rios na sala.',
+          'L Não h outros usuários na sala.',
 
         ephemeral: true
 
@@ -8000,7 +7997,7 @@ async function tempVoiceControl(
 
       content:
 
-        '=d Escolha o usu�rio:',
+        '=d Escolha o usuário:',
 
       components: [
 
@@ -8064,7 +8061,7 @@ async function tempVoiceControl(
 
         content:
 
-          'L N�o h� outro usu�rio para receber a posse.',
+          'L Não h outro usuário para receber a posse.',
 
         ephemeral: true
 
@@ -8102,7 +8099,7 @@ async function tempVoiceControl(
 
       content:
 
-        '�Y'' Escolha o novo dono:',
+        '👑 Escolha o novo dono:',
 
       components: [
 
@@ -8178,7 +8175,7 @@ async function handleTempVoiceModalAction(
 
       content:
 
-        'L Voc� n�o � o dono desta sala ou ela n�o existe mais.',
+        'L Você não  o dono desta sala ou ela não existe mais.',
 
 
     });
@@ -8229,7 +8226,7 @@ async function handleTempVoiceModalAction(
 
         content:
 
-          'L Informe um n�mero entre 0 e 99.',
+          'L Informe um número entre 0 e 99.',
 
   
       });
@@ -8237,10 +8234,10 @@ async function handleTempVoiceModalAction(
     }
     try {
       await channel.setUserLimit(value);
-      return interaction.editReply({ content: `. Limite definido para **${value === 0 ? 'sem limite' : value}**.` });
+      return interaction.editReply({ content: `. Limite definido para **${value === 0 ? 'sem limite' : value}**.` });
     } catch (error) {
       console.error('[TempVoice] Erro ao alterar limite:', error);
-      return interaction.editReply({ content: error?.code === 50013 ? 'L O bot n�o tem permiss�o para alterar o limite desta sala. Verifique **Gerenciar canais**.' : 'L N�o foi poss�vel alterar o limite da sala.' });
+      return interaction.editReply({ content: error?.code === 50013 ? 'L O bot não tem permissão para alterar o limite desta sala. Verifique **Gerenciar canais**.' : 'L Não foi possível alterar o limite da sala.' });
     }
 
   }
@@ -8266,14 +8263,14 @@ async function handleTempVoiceModalAction(
         )
 
         .trim();
-    if (!name) return interaction.editReply({ content: 'L Informe um nome v�lido para a sala.' });
+    if (!name) return interaction.editReply({ content: 'L Informe um nome vlido para a sala.' });
 
     try {
       await channel.setName(name);
-      return interaction.editReply({ content: `. Sala renomeada para **${name}**.` });
+      return interaction.editReply({ content: `. Sala renomeada para **${name}**.` });
     } catch (error) {
       console.error('[TempVoice] Erro ao renomear sala:', error);
-      return interaction.editReply({ content: error?.code === 50013 ? 'L O bot n�o tem permiss�o para renomear esta sala. Verifique **Gerenciar canais** e as permiss�es da categoria.' : 'L N�o foi poss�vel renomear a sala.' });
+      return interaction.editReply({ content: error?.code === 50013 ? 'L O bot não tem permissão para renomear esta sala. Verifique **Gerenciar canais** e as permissões da categoria.' : 'L Não foi possível renomear a sala.' });
     }
 
   }
@@ -8342,7 +8339,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        'L Voc� n�o � o dono desta sala.',
+        'L Você não  o dono desta sala.',
 
       ephemeral: true
 
@@ -8368,7 +8365,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        'L Usu�rio n�o encontrado.',
+        'L Usurio não encontrado.',
 
       ephemeral: true
 
@@ -8400,7 +8397,7 @@ async function handleTempVoiceSelect(
 
         content:
 
-          'L O usu�rio n�o est� mais na sala.',
+          'L O usuário não está mais na sala.',
 
         ephemeral: true
 
@@ -8500,7 +8497,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        `�Y'' A posse da sala foi transferida para ${member}.`,
+        `Y'' A posse da sala foi transferida para ${member}.`,
 
       components: []
 
@@ -8514,8 +8511,7 @@ async function handleTempVoiceSelect(
 
 function buildTempVoicePanelPayload() {
   const embed = createEmbed({
-    title: tempVoiceConfig.title || '=
- Salas de Voz Tempor�rias',
+    title: tempVoiceConfig.title || '🔊 Salas de Voz Temporárias',
     description: tempVoiceConfig.description || 'Clique no menu abaixo para criar e administrar sua sala de voz.',
     color: tempVoiceConfig.color || '#5865F2',
     footer: tempVoiceConfig.footer || undefined
@@ -8524,10 +8520,10 @@ function buildTempVoicePanelPayload() {
   if (tempVoiceConfig.banner) embed.setImage(tempVoiceConfig.banner);
   if (tempVoiceConfig.icon) embed.setThumbnail(tempVoiceConfig.icon);
 
-  const emojis = { create:'�', rename:'', lock:'�Y"'', unlock:'�Y""', limit:'=d', kick:'=d', transfer:'�Y''', delete:'�Y-'' };
+  const emojis = { create:'🔊', rename:'✏️', lock:'🔒', unlock:'🔓', limit:'👥', kick:'👢', transfer:'👑', delete:'🗑️' };
   const actions = new StringSelectMenuBuilder()
     .setCustomId('tempvoice_action')
-    .setPlaceholder('�YZT Selecione uma a��o para sua sala')
+    .setPlaceholder('YZT Selecione uma aío para sua sala')
     .addOptions(Object.keys(tempVoiceConfig.options).filter(k => tempVoiceConfig.options[k]).map(option =>
       new StringSelectMenuOptionBuilder()
         .setLabel(getTempVoiceOptionLabel(option))
@@ -8540,18 +8536,17 @@ function buildTempVoicePanelPayload() {
 
   const config = new StringSelectMenuBuilder()
     .setCustomId('tempvoice_panel_config')
-    .setPlaceholder('� Configura��o do painel')
+    .setPlaceholder(' Configuraío do painel')
     .addOptions(
       ['description','title','color','banner','icon','footer','defaultName','categoryId','deleteAfterMinutes','userLimit','options','authorizedRoleId','reset'].map((value, i) => {
         const data = [
-          ['Descri��o','Altera a descri��o do embed.','=�'], ['T�tulo','Altera o t�tulo do embed.',''],
-          ['Cor','Define a cor hexadecimal do embed.','<�'], ['Banner','Adiciona ou altera a imagem principal.','=�'],
-          ['�cone / Thumbnail','Adiciona ou altera a thumbnail.','=�'], ['Rodap�','Personaliza o footer do painel.','�Y"O'],
-          ['Nome padr�o das calls','Define o nome usado ao criar salas.','=
-'], ['Categoria das calls','Define a categoria onde as salas ser�o criadas.','=�'],
-          ['Tempo de exclus�o autom�tica','Define os minutos que uma sala vazia permanece.','�'], ['Limite padr�o','Define o limite de usu�rios das novas salas.','=d'],
-          ['Op��es / bot�es do painel','Ativa ou desativa as op��es da Call Priv.','�YZ>'], ['Permiss�o de configura��o','Define o cargo autorizado a configurar o painel.','=�'],
-          ['Restaurar padr�o','Volta todas as configura��es aos valores originais.','=']
+          ['Descrição','Altera a descrição do embed.','📝'], ['Título','Altera o título do embed.','✏️'],
+          ['Cor','Define a cor hexadecimal do embed.','🎨'], ['Banner','Adiciona ou altera a imagem principal.','🖼️'],
+          ['Ícone / Thumbnail','Adiciona ou altera a thumbnail.','🖼️'], ['Rodapé','Personaliza o footer do painel.','📌'],
+          ['Nome padrão das calls','Define o nome usado ao criar salas.','🔊'], ['Categoria das calls','Define a categoria onde as salas serão criadas.','📁'],
+          ['Tempo de exclusão automática','Define os minutos que uma sala vazia permanece.','⏱️'], ['Limite padrão','Define o limite de usuários das novas salas.','👥'],
+          ['Opções / botões do painel','Ativa ou desativa as opções da Call Priv.','⚙️'], ['Permissão de configuração','Define o cargo autorizado a configurar o painel.','🔐'],
+          ['Restaurar padrão','Volta todas as configurações aos valores originais.','♻️']
         ][i];
         return new StringSelectMenuOptionBuilder().setLabel(data[0]).setDescription(data[1]).setEmoji(data[2]).setValue(value);
       })
@@ -8589,7 +8584,7 @@ async function sendTempVoicePanel(channel) {
 async function handleTempVoiceActionSelect(interaction) {
   const action = interaction.values[0];
   if (!tempVoiceConfig.options[action] && action !== 'create') {
-    return interaction.reply({ content:'L Esta op��o est� desativada no painel.', ephemeral:true });
+    return interaction.reply({ content:'L Esta opção está desativada no painel.', ephemeral:true });
   }
 
   if (action === 'create') {
@@ -8598,13 +8593,13 @@ async function handleTempVoiceActionSelect(interaction) {
       const existingChannel = interaction.guild.channels.cache.get(existing[0]);
       if (existingChannel) {
         if (interaction.member.voice?.channelId !== existingChannel.id) await interaction.member.voice.setChannel(existingChannel).catch(() => {});
-        return interaction.reply({ content:`� Voc� j� possui uma sala: ${existingChannel}`, ephemeral:true });
+        return interaction.reply({ content:` Você já possui uma sala: ${existingChannel}`, ephemeral:true });
       }
       tempRooms.delete(existing[0]);
       saveTempRooms();
     }
 
-    // A cria��o da sala pode passar de 3 segundos. Reconhe�a a intera��o antes da API do Discord.
+    // A criação da sala pode passar de 3 segundos. Reconhea a interação antes da API do Discord.
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     try {
@@ -8612,13 +8607,13 @@ async function handleTempVoiceActionSelect(interaction) {
       if (interaction.member.voice?.channelId !== channel.id) {
         await interaction.member.voice.setChannel(channel).catch(() => {});
       }
-      return interaction.editReply({ content:`. Sua sala foi criada: ${channel}` });
+      return interaction.editReply({ content:`. Sua sala foi criada: ${channel}` });
     } catch (error) {
       console.error('[TempVoice] Erro ao criar sala:', error);
       return interaction.editReply({
         content: error?.code === 50013
-          ? 'L O bot n�o tem permiss�o para criar/configurar a sala. Verifique **Gerenciar canais**, **Gerenciar permiss�es** e as permiss�es da categoria.'
-          : 'L N�o foi poss�vel criar sua sala de voz. Verifique as permiss�es do bot e a categoria configurada.'
+          ? 'L O bot não tem permissão para criar/configurar a sala. Verifique **Gerenciar canais**, **Gerenciar permissões** e as permissões da categoria.'
+          : 'L Não foi possível criar sua sala de voz. Verifique as permissões do bot e a categoria configurada.'
       });
     }
   }
@@ -8636,19 +8631,19 @@ async function handleTempVoicePanelConfigSelect(interaction) {
     resetTempVoiceConfig();
     saveTempVoiceConfig();
     await refreshTempVoicePanel(interaction.guild);
-    return interaction.reply({ content:'= Todas as configura��es foram restauradas e o painel foi atualizado em tempo real.', ephemeral:true });
+    return interaction.reply({ content:'= Todas as configurações foram restauradas e o painel foi atualizado em tempo real.', ephemeral:true });
   }
 
   if (option === 'options') {
-    const modal = new ModalBuilder().setCustomId('tempvoice_panel_config:options').setTitle('�YZ> Op��es do painel');
+    const modal = new ModalBuilder().setCustomId('tempvoice_panel_config:options').setTitle('YZ> Opes do painel');
     for (const [key,label] of [['create','Criar sala'],['rename','Renomear sala'],['lock','Bloquear sala'],['unlock','Desbloquear sala'],['limit','Alterar limite'],['kick','Expulsar membro'],['transfer','Transferir posse'],['delete','Excluir sala']]) {
-      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(key).setLabel(`${label} �" ON/OFF`).setPlaceholder('ON ou OFF').setValue(tempVoiceConfig.options[key] ? 'ON':'OFF').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)));
+      modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId(key).setLabel(`${label} " ON/OFF`).setPlaceholder('ON ou OFF').setValue(tempVoiceConfig.options[key] ? 'ON':'OFF').setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(3)));
     }
     return interaction.showModal(modal);
   }
 
-  const labels = { description:'Descri��o do painel', banner:'URL do banner', icon:'URL do �cone/thumbnail', title:'T�tulo do painel', color:'Cor do embed', footer:'Rodap� do painel', defaultName:'Nome padr�o das calls', categoryId:'ID da categoria das calls', deleteAfterMinutes:'Tempo para excluir sala vazia (minutos)', userLimit:'Limite padr�o de usu�rios', authorizedRoleId:'ID do cargo autorizado' };
-  const placeholders = { description:'Ex.: Crie e administre sua pr�pria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title: 'Salas de Voz Temporárias', color:'#5865F2', footer: 'Call Priv - Configuração dinâmica', defaultName: '🔊 {user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
+  const labels = { description:'Descrição do painel', banner:'URL do banner', icon:'URL do ícone/thumbnail', title:'Título do painel', color:'Cor do embed', footer:'Rodapé do painel', defaultName:'Nome padrão das calls', categoryId:'ID da categoria das calls', deleteAfterMinutes:'Tempo para excluir sala vazia (minutos)', userLimit:'Limite padrão de usuários', authorizedRoleId:'ID do cargo autorizado' };
+  const placeholders = { description:'Ex.: Crie e administre sua prpria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title: 'Salas de Voz Temporárias', color:'#5865F2', footer: 'Call Priv - Configuração dinâmica', defaultName: '🔊 {user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
   const modal = new ModalBuilder().setCustomId(`tempvoice_panel_config:${option}`).setTitle(labels[option]);
   const input = new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setStyle(option === 'description' || option === 'footer' ? TextInputStyle.Paragraph : TextInputStyle.Short).setRequired(false).setMaxLength(option === 'description' ? 4000 : 1000);
   const current = String(tempVoiceConfig[option] ?? '');
@@ -8658,7 +8653,7 @@ async function handleTempVoicePanelConfigSelect(interaction) {
 }
 
 async function handleTempVoicePanelConfigModal(interaction) {
-  if (!isTempVoicePanelAdmin(interaction.member)) return interaction.reply({ content:'L Voc� n�o possui permiss�o para configurar o painel.', ephemeral:true });
+  if (!isTempVoicePanelAdmin(interaction.member)) return interaction.reply({ content:'L Você não possui permissão para configurar o painel.', ephemeral:true });
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
   const option = interaction.customId.split(':')[1];
 
@@ -8670,32 +8665,32 @@ async function handleTempVoicePanelConfigModal(interaction) {
     }
     tempVoiceConfig.options.create = true;
     saveTempVoiceConfig(); await refreshTempVoicePanel(interaction.guild);
-    return interaction.editReply({ content:'�YZ> Op��es do painel atualizadas em tempo real.' });
+    return interaction.editReply({ content:'YZ> Opes do painel atualizadas em tempo real.' });
   }
 
   const value = interaction.fields.getTextInputValue('value').trim();
-  if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({ content:'L Para banner/�cone, informe uma URL come�ando com `http://` ou `https://`.' });
+  if ((option === 'banner' || option === 'icon') && value && !/^https?:\/\//i.test(value)) return interaction.editReply({ content:'L Para banner/ícone, informe uma URL começando com `http://` ou `https://`.' });
   if (option === 'color' && value && !/^#[0-9A-Fa-f]{6}$/.test(value)) return interaction.editReply({ content:'L A cor deve estar no formato hexadecimal, por exemplo `#5865F2`.' });
 
   if (option === 'deleteAfterMinutes') {
-    const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 10080) return interaction.editReply({ content:'L Informe um n�mero inteiro entre 1 e 10080 minutos.' });
+    const n = Number(value); if (!Number.isInteger(n) || n < 1 || n > 10080) return interaction.editReply({ content:'L Informe um número inteiro entre 1 e 10080 minutos.' });
     tempVoiceConfig[option] = n;
   } else if (option === 'userLimit') {
-    const n = Number(value); if (!Number.isInteger(n) || n < 0 || n > 99) return interaction.editReply({ content:'L O limite deve ser um n�mero entre 0 e 99. Use `0` para ilimitado.' });
+    const n = Number(value); if (!Number.isInteger(n) || n < 0 || n > 99) return interaction.editReply({ content:'L O limite deve ser um número entre 0 e 99. Use `0` para ilimitado.' });
     tempVoiceConfig[option] = n;
   } else if (option === 'categoryId') {
-    if (value) { const c = interaction.guild.channels.cache.get(value); if (!c || c.type !== ChannelType.GuildCategory) return interaction.editReply({ content:'L O ID informado n�o pertence a uma categoria v�lida deste servidor.' }); }
+    if (value) { const c = interaction.guild.channels.cache.get(value); if (!c || c.type !== ChannelType.GuildCategory) return interaction.editReply({ content:'L O ID informado não pertence a uma categoria vlida deste servidor.' }); }
     tempVoiceConfig[option] = value;
   } else if (option === 'authorizedRoleId') {
-    if (value && !interaction.guild.roles.cache.get(value)) return interaction.editReply({ content:'L N�o encontrei esse cargo neste servidor.' });
+    if (value && !interaction.guild.roles.cache.get(value)) return interaction.editReply({ content:'L Não encontrei esse cargo neste servidor.' });
     tempVoiceConfig[option] = value;
   } else {
     tempVoiceConfig[option] = value;
   }
 
   normalizeTempVoiceConfig(); saveTempVoiceConfig(); await refreshTempVoicePanel(interaction.guild);
-  const names = { description:'Descri��o', banner:'Banner', icon:'�cone/Thumbnail', title:'T�tulo', color:'Cor', footer:'Rodap�', defaultName:'Nome padr�o', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclus�o autom�tica', userLimit:'Limite padr�o', authorizedRoleId:'Permiss�o de configura��o' };
-  return interaction.editReply({ content:`. ${names[option] || option} atualizado e aplicado em tempo real.` });
+  const names = { description:'Descrição', banner:'Banner', icon:'ícone/Thumbnail', title:'Título', color:'Cor', footer:'Rodapé', defaultName:'Nome padrão', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclusão automtica', userLimit:'Limite padrão', authorizedRoleId:'Permissóo de configuração' };
+  return interaction.editReply({ content:`. ${names[option] || option} atualizado e aplicado em tempo real.` });
 }
 
 
@@ -8724,8 +8719,7 @@ async function showCallRanking(
 
       content:
 
-        '=
- Ainda n�o existem dados de call suficientes.',
+        '📊 Ainda não existem dados de call suficientes.',
 
       ephemeral: true
 
@@ -8741,7 +8735,7 @@ async function showCallRanking(
 
       (row, index) =>
 
-        `**${index + 1}.** <@${row.user_id}> �" **${formatHours(row.voice_seconds)}h**`
+        `**${index + 1}.** <@${row.user_id}> " **${formatHours(row.voice_seconds)}h**`
 
     );
 
@@ -8755,7 +8749,7 @@ async function showCallRanking(
 
         title:
 
-          '�Y� Ranking de Call',
+          'Y Ranking de Call',
 
         description:
 
@@ -8874,7 +8868,7 @@ async function showUserCallHours(
 
         content:
 
-          'L N�o foi poss�vel consultar as horas em call.'
+          'L Não foi possível consultar as horas em call.'
 
       });
 
@@ -8886,7 +8880,7 @@ async function showUserCallHours(
 
       content:
 
-        'L N�o foi poss�vel consultar as horas em call.',
+        'L Não foi possível consultar as horas em call.',
 
       flags: MessageFlags.Ephemeral
 
@@ -8918,7 +8912,7 @@ async function createMatchProfile(
 
       .setTitle(
 
-        `Perfil de Match �" ${category}`
+        `Perfil de Match " ${category}`
 
       );
 
@@ -9086,7 +9080,7 @@ async function createMatchProfile(
 
       'social'
 
-    ) || 'N�o informado';
+    ) || 'Não informado';
 
 
 
@@ -9096,7 +9090,7 @@ async function createMatchProfile(
 
       title:
 
-        `=� Perfil de Match �" ${nome}`,
+        `= Perfil de Match " ${nome}`,
 
 
 
@@ -9126,7 +9120,7 @@ async function createMatchProfile(
 
         {
 
-          name: '�YZ, Idade',
+          name: 'YZ, Idade',
 
           value: idade,
 
@@ -9136,7 +9130,7 @@ async function createMatchProfile(
 
         {
 
-          name: '�Y", Categoria',
+          name: 'Y", Categoria',
 
           value: category,
 
@@ -9146,7 +9140,7 @@ async function createMatchProfile(
 
         {
 
-          name: '�YO� Rede Social',
+          name: 'YO Rede Social',
 
           value: social,
 
@@ -9194,7 +9188,7 @@ async function createMatchProfile(
 
           .setLabel(
 
-            'd Dar Match'
+            'd Dar Match'
 
           )
 
@@ -9216,7 +9210,7 @@ async function createMatchProfile(
 
           .setLabel(
 
-            '� Bloquear'
+            ' Bloquear'
 
           )
 
@@ -9308,7 +9302,7 @@ async function createMatchProfile(
 
   await interaction.reply({
 
-    content:      '. Seu perfil foi criado e publicado no painel de Match.',
+    content:      '. Seu perfil foi criado e publicado no painel de Match.',
 
     ephemeral: true
 
@@ -9338,7 +9332,7 @@ async function handleMatchLike(
 
       content:
 
-        'L Voc� n�o pode dar Match no pr�prio perfil.',
+        'L Você não pode dar Match no prprio perfil.',
 
       ephemeral: true
 
@@ -9388,7 +9382,7 @@ async function handleMatchLike(
 
       content:
 
-        'L Perfil n�o encontrado.',
+        'L Perfil não encontrado.',
 
       ephemeral: true
 
@@ -9494,7 +9488,7 @@ async function handleMatchLike(
 
         content:
 
-          `=� **Match m�tuo!**\nVoc� e ${target || `<@${targetId}>`} deram Match um no outro!`
+          `= **Match mtuo!**\nVocê e ${target || `<@${targetId}>`} deram Match um no outro!`
 
       });
 
@@ -9510,7 +9504,7 @@ async function handleMatchLike(
 
           content:
 
-            `=� **Match m�tuo!**\nVoc� e ${interaction.user} deram Match um no outro!`
+            `= **Match mtuo!**\nVocê e ${interaction.user} deram Match um no outro!`
 
         });
 
@@ -9524,7 +9518,7 @@ async function handleMatchLike(
 
       content:
 
-        '=� **Match m�tuo!** As duas pessoas receberam uma notifica��o por DM.',
+        '= **Match mtuo!** As duas pessoas receberam uma notificaío por DM.',
 
       ephemeral: true
 
@@ -9538,7 +9532,7 @@ async function handleMatchLike(
 
     content:
 
-      'd Interesse registrado! Se a outra pessoa tamb�m curtir seu perfil, ser� um Match m�tuo.',
+      'd Interesse registrado! Se a outra pessoa também curtir seu perfil, ser um Match mtuo.',
 
     ephemeral: true
 
@@ -9614,7 +9608,7 @@ async function handleMatchBlock(
 
     content:
 
-      '� Perfil bloqueado para voc�.',
+      ' Perfil bloqueado para você.',
 
     ephemeral: true
 
@@ -9654,7 +9648,7 @@ async function sendMatchPanel(
 
       footer:
 
-        'Crie seu perfil e encontre novas conex�es.'
+        'Crie seu perfil e encontre novas conexões.'
 
     });
 
@@ -9824,7 +9818,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Verifica se o bot est� online.'
+        'Verifica se o bot está online.'
 
       ),
 
@@ -9880,7 +9874,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usu�rio.'
+            'Usurio.'
 
           )
 
@@ -9924,7 +9918,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usu�rio.'
+            'Usurio.'
 
           )
 
@@ -10004,7 +9998,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usu�rio.'
+                'Usurio.'
 
               )
 
@@ -10050,7 +10044,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usu�rio.'
+                'Usurio.'
 
               )
 
@@ -10112,7 +10106,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra o painel de estat�sticas.'
+        'Mostra o painel de estatsticas.'
 
       ),
 
@@ -10124,7 +10118,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Envia o painel de verifica��o.'
+        'Envia o painel de verificação.'
 
       ),
 
@@ -10136,7 +10130,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Envia o painel de salas tempor�rias.'
+        'Envia o painel de salas temporárias.'
 
       ),
 
@@ -10160,7 +10154,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra as horas de call de um usu�rio.'
+        'Mostra as horas de call de um usuário.'
 
       )
 
@@ -10172,7 +10166,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usu�rio.'
+            'Usurio.'
 
           )
 
@@ -10188,7 +10182,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Mostra as horas de call de um usu�rio.'
+        'Mostra as horas de call de um usuário.'
 
       )
 
@@ -10200,7 +10194,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usu�rio.'
+            'Usurio.'
 
           )
 
@@ -10266,7 +10260,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'T�tulo.'
+                'Título.'
 
               )
 
@@ -10337,7 +10331,7 @@ async function registerCommands() {
 
       .setDescription(
 
-        'Gerencia permiss�es personalizadas.'
+        'Gerencia permissões personalizadas.'
 
       )
 
@@ -10349,7 +10343,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Concede uma permiss�o a um cargo.'
+            'Concede uma permissão a um cargo.'
 
           )
 
@@ -10377,7 +10371,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permiss�o.'
+                'Permissóo.'
 
               )
 
@@ -10411,7 +10405,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Remove uma permiss�o.'
+            'Remove uma permissão.'
 
           )
 
@@ -10439,7 +10433,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permiss�o.'
+                'Permissóo.'
 
               )
 
@@ -10473,7 +10467,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Lista as permiss�es de um cargo.'
+            'Lista as permissões de um cargo.'
 
           )
 
@@ -10609,7 +10603,7 @@ async function handleSlashCommand(
 
       content:
 
-        `�Y�" Pong! ${client.ws.ping}ms`,
+        `Y" Pong! ${client.ws.ping}ms`,
 
       ephemeral: true
 
@@ -10641,7 +10635,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui a permiss�o `dashboard.view`.',
+          'L Você não possui a permissão `dashboard.view`.',
 
         ephemeral: true
 
@@ -10735,7 +10729,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui a permiss�o `verification.manage`.',
+          'L Você não possui a permissão `verification.manage`.',
 
         ephemeral: true
 
@@ -10757,7 +10751,7 @@ async function handleSlashCommand(
 
       content:
 
-        '. Painel de verifica��o enviado.',
+        '. Painel de verificação enviado.',
 
       ephemeral: true
 
@@ -10789,7 +10783,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui a permiss�o `voice.manage`.',
+          'L Você não possui a permissão `voice.manage`.',
 
         ephemeral: true
 
@@ -10811,7 +10805,7 @@ async function handleSlashCommand(
 
       content:
 
-        '. Painel de voz enviado.',
+        '. Painel de voz enviado.',
 
       ephemeral: true
 
@@ -10843,7 +10837,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui a permiss�o `match.manage`.',
+          'L Você não possui a permissão `match.manage`.',
 
         ephemeral: true
 
@@ -10865,7 +10859,7 @@ async function handleSlashCommand(
 
       content:
 
-        '. Painel de Match enviado.',
+        '. Painel de Match enviado.',
 
       ephemeral: true
 
@@ -10945,7 +10939,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui a permiss�o `rules.manage`.',
+          'L Você não possui a permissão `rules.manage`.',
 
         ephemeral: true
 
@@ -10963,7 +10957,7 @@ async function handleSlashCommand(
     if (sub === 'panel') {
       const ok = await refreshRulesPanel(interaction.guild);
       return interaction.reply({
-        content: ok ? `. Painel de regras enviado/renovado no canal <#${RULES_CHANNEL_ID}>.` : 'L N�o consegui acessar o canal configurado para as regras.',
+        content: ok ? `. Painel de regras enviado/renovado no canal <#${RULES_CHANNEL_ID}>.` : 'L Não consegui acessar o canal configurado para as regras.',
         flags: MessageFlags.Ephemeral
       });
     }
@@ -10988,7 +10982,7 @@ async function handleSlashCommand(
 
           content:
 
-            '=� Nenhuma regra cadastrada.',
+            '= Nenhuma regra cadastrada.',
 
           ephemeral: true
 
@@ -11006,7 +11000,7 @@ async function handleSlashCommand(
 
             rule =>
 
-              `**#${rule.rule_id} �" ${rule.title}**\n${rule.content}`
+              `**#${rule.rule_id} " ${rule.title}**\n${rule.content}`
 
           )
 
@@ -11022,7 +11016,7 @@ async function handleSlashCommand(
 
             title:
 
-              '=� Regras do servidor',
+              '= Regras do servidor',
 
             description:
 
@@ -11110,7 +11104,7 @@ async function handleSlashCommand(
 
         content:
 
-          '. Regra adicionada.',
+          '. Regra adicionada.',
 
         ephemeral: true
 
@@ -11164,7 +11158,7 @@ async function handleSlashCommand(
 
         content:
 
-          '. Regra removida, caso existisse.',
+          '. Regra removida, caso existisse.',
 
         ephemeral: true
 
@@ -11188,7 +11182,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Somente administradores do Discord podem configurar permiss�es personalizadas.',
+          'L Somente administradores do Discord podem configurar permissões personalizadas.',
 
         ephemeral: true
 
@@ -11244,7 +11238,7 @@ async function handleSlashCommand(
 
         content:
 
-          `. \`${permission}\` concedida ao cargo ${role}.`,
+          `. \`${permission}\` concedida ao cargo ${role}.`,
 
         ephemeral: true
 
@@ -11272,7 +11266,7 @@ async function handleSlashCommand(
 
         content:
 
-          `. \`${permission}\` removida do cargo ${role}.`,
+          `. \`${permission}\` removida do cargo ${role}.`,
 
         ephemeral: true
 
@@ -11302,9 +11296,9 @@ async function handleSlashCommand(
 
           permissions.length
 
-            ? `=� Permiss�es de ${role}:\n${permissions.map(p => `� \`${p}\``).join('\n')}`
+            ? `= Permissões de ${role}:\n${permissions.map(p => ` \`${p}\``).join('\n')}`
 
-            : `�"� O cargo ${role} n�o possui permiss�es personalizadas.`,
+            : `" O cargo ${role} não possui permissões personalizadas.`,
 
         ephemeral: true
 
@@ -11334,7 +11328,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui `moderation.clear`.',
+          'L Você não possui `moderation.clear`.',
 
         ephemeral: true
 
@@ -11378,7 +11372,7 @@ async function handleSlashCommand(
 
     return interaction.editReply(
 
-      `=� ${deleted.size} mensagens apagadas.`
+      `= ${deleted.size} mensagens apagadas.`
 
     );
 
@@ -11420,7 +11414,7 @@ async function handleSlashCommand(
 
         content:
 
-          `L Voc� n�o possui \`${permission}\`.`,
+          `L Você não possui \`${permission}\`.`,
 
         ephemeral: true
 
@@ -11470,7 +11464,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Membro n�o encontrado.',
+          'L Membro não encontrado.',
 
         ephemeral: true
 
@@ -11518,7 +11512,7 @@ async function handleSlashCommand(
 
         interaction.guild,
 
-        `� **${command.toUpperCase()}**\nUsu�rio: ${user}\nModerador: ${interaction.user}\nMotivo: ${reason}`
+        ` **${command.toUpperCase()}**\nUsurio: ${user}\nModerador: ${interaction.user}\nMotivo: ${reason}`
 
       );
 
@@ -11528,7 +11522,7 @@ async function handleSlashCommand(
 
         content:
 
-          `. ${user.tag} foi ${command === 'kick' ? 'expulso' : 'banido'}.`,
+          `. ${user.tag} foi ${command === 'kick' ? 'expulso' : 'banido'}.`,
 
         ephemeral: true
 
@@ -11540,7 +11534,7 @@ async function handleSlashCommand(
 
         content:
 
-          `L N�o foi poss�vel executar a a��o: ${e.message}`,
+          `L Não foi possível executar a aío: ${e.message}`,
 
         ephemeral: true
 
@@ -11568,7 +11562,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� precisa ser administrador para usar este comando.',
+          'L Você precisa ser administrador para usar este comando.',
 
         ephemeral: true
 
@@ -11624,7 +11618,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Membro n�o encontrado.',
+          'L Membro não encontrado.',
 
         ephemeral: true
 
@@ -11660,7 +11654,7 @@ async function handleSlashCommand(
 
         content:
 
-          `. Cargo ${role} ${sub === 'add' ? 'adicionado a' : 'removido de'} ${member}.`,
+          `. Cargo ${role} ${sub === 'add' ? 'adicionado a' : 'removido de'} ${member}.`,
 
         ephemeral: true
 
@@ -11704,7 +11698,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui `ticket.manage`.',
+          'L Você não possui `ticket.manage`.',
 
         ephemeral: true
 
@@ -11850,7 +11844,7 @@ async function handleSlashCommand(
 
       content:
 
-        `<� ${interaction.user}, seu ticket foi criado.\nUse **/close** quando quiser fech�-lo.`
+        `< ${interaction.user}, seu ticket foi criado.\nUse **/close** quando quiser fech-lo.`
 
     });
 
@@ -11860,7 +11854,7 @@ async function handleSlashCommand(
 
       content:
 
-        `. Ticket criado: ${channel}`,
+        `. Ticket criado: ${channel}`,
 
       ephemeral: true
 
@@ -11898,7 +11892,7 @@ async function handleSlashCommand(
 
         content:
 
-          'L Voc� n�o possui permiss�o para fechar este ticket.',
+          'L Você não possui permissão para fechar este ticket.',
 
         ephemeral: true
 
@@ -11940,7 +11934,7 @@ async function handleSlashCommand(
 
       content:
 
-        '�Y"' Ticket fechado.'
+        '🔒 Ticket fechado.'
 
     });
 
@@ -11992,7 +11986,7 @@ client.once(
 
           ? 'sim'
 
-          : 'n�o'
+          : 'não'
 
       }`
 
@@ -12096,7 +12090,7 @@ client.once(
             });
 
           voiceConnection.on('error', (error) => {
-            console.warn('[Voice] Erro na conex�o de voz:', error?.message || error);
+            console.warn('[Voice] Erro na conexo de voz:', error?.message || error);
             try { voiceConnection?.destroy(); } catch {}
             voiceConnection = null;
           });
@@ -12237,7 +12231,7 @@ client.on(
           });
         } catch (error) {
           console.error(
-            '[RankCall] Erro na pagina��o do painel Geral:',
+            '[RankCall] Erro na paginaío do painel Geral:',
             error.message
           );
         }
@@ -12250,11 +12244,11 @@ client.on(
       ) {
         const modal = new ModalBuilder()
           .setCustomId('rankcall_general_id_modal')
-          .setTitle('�Y"Z Consultar por ID');
+          .setTitle('Y"Z Consultar por ID');
 
         const idInput = new TextInputBuilder()
           .setCustomId('user_id')
-          .setLabel('ID do usu�rio')
+          .setLabel('ID do usuário')
           .setPlaceholder('Ex.: 123456789012345678')
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
@@ -12277,7 +12271,7 @@ client.on(
 
           if (!/^\d{17,20}$/.test(userId)) {
             await interaction.reply({
-              content: 'L ID de usu�rio inv�lido. Informe um ID num�rico v�lido do Discord.',
+              content: 'L ID de usuário invlido. Informe um ID numrico vlido do Discord.',
               ephemeral: true
             });
             return;
@@ -12288,7 +12282,7 @@ client.on(
 
           if (userIndex === -1) {
             await interaction.reply({
-              content: 'L Esse usu�rio n�o possui horas registradas no ranking.',
+              content: 'L Esse usuário não possui horas registradas no ranking.',
               ephemeral: true
             });
             return;
@@ -12321,7 +12315,7 @@ client.on(
 
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
-              content: 'L N�o foi poss�vel consultar esse ID agora.',
+              content: 'L Não foi possível consultar esse ID agora.',
               ephemeral: true
             }).catch(() => {});
           }
@@ -12356,7 +12350,7 @@ client.on(
 
           if (!interaction.replied && !interaction.deferred) {
             await interaction.reply({
-              content: 'N�o foi poss�vel abrir o ranking geral agora.',
+              content: 'Não foi possível abrir o ranking geral agora.',
               ephemeral: true
             }).catch(() => {});
           }
@@ -12376,7 +12370,7 @@ client.on(
           await interaction.deferUpdate().catch(() => {});
           await publishRankCallPanel(interaction.guild, { page: nextPage, streakPage: rankCallConfig.streakPage || 0 });
         } catch (error) {
-          console.error('[RankCall] Pagina��o de horas:', error.message);
+          console.error('[RankCall] Paginaío de horas:', error.message);
         }
         return;
       }
@@ -12393,7 +12387,7 @@ client.on(
           await interaction.deferUpdate().catch(() => {});
           await publishRankCallPanel(interaction.guild, { page: rankCallConfig.page || 0, streakPage: nextPage });
         } catch (error) {
-          console.error('[RankCall] Pagina��o de sequ�ncias:', error.message);
+          console.error('[RankCall] Paginaío de sequências:', error.message);
         }
         return;
       }
@@ -12982,7 +12976,7 @@ client.on(
 
             content:
 
-              'L Ocorreu um erro ao processar esta a��o.',
+              'L Ocorreu um erro ao processar esta aío.',
 
             ephemeral: true
 
@@ -12994,7 +12988,7 @@ client.on(
 
             content:
 
-              'L Ocorreu um erro ao processar esta a��o.',
+              'L Ocorreu um erro ao processar esta aío.',
 
             ephemeral: true
 
@@ -13060,18 +13054,18 @@ async function forwardIncomingDmToLog(message) {
 
     const logChannel = await client.channels.fetch(DM_LOG_CHANNEL_ID).catch(() => null);
     if (!logChannel?.isTextBased()) {
-      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} n�o encontrado ou n�o � de texto.`);
+      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} não encontrado ou não  de texto.`);
       return true;
     }
 
-    const content = message.content?.trim() || '*Sem texto �" veja os anexos abaixo.*';
+    const content = message.content?.trim() || '*Sem texto " veja os anexos abaixo.*';
     const attachmentLines = [...message.attachments.values()].map(
-      attachment => `�Y"Z [${attachment.name || 'arquivo'}](${attachment.url})`
+      attachment => `Y"Z [${attachment.name || 'arquivo'}](${attachment.url})`
     );
 
     const description = [
-      `=d **Usu�rio:** ${message.author.tag || message.author.username}`,
-      `�Y?" **ID:** \`${message.author.id}\``,
+      `=d **Usurio:** ${message.author.tag || message.author.username}`,
+      `Y?" **ID:** \`${message.author.id}\``,
       '',
       '=d **Mensagem:**',
       content,
@@ -13079,7 +13073,7 @@ async function forwardIncomingDmToLog(message) {
     ].filter(Boolean).join('\n').slice(0, 4096);
 
     const embed = new EmbedBuilder()
-      .setTitle('=� Nova mensagem recebida no PV')
+      .setTitle('= Nova mensagem recebida no PV')
       .setDescription(description)
       .setColor('#5865F2')
       .setTimestamp(message.createdAt || new Date());
@@ -13202,7 +13196,7 @@ client.on(
 
         await message.reply(
 
-          `�Y�" Pong! ${client.ws.ping}ms`
+          `Y" Pong! ${client.ws.ping}ms`
 
         );
 
@@ -13224,7 +13218,7 @@ client.on(
 
         await message.reply(
 
-          `�Y'< Ol�, ${message.author}!`
+          `Y'< Ol, ${message.author}!`
 
         );
 
@@ -13244,7 +13238,7 @@ client.on(
 
       ) {
         await refreshRules2Panel(message.guild);
-        await message.reply('. Painel de regras 2 publicado/atualizado neste canal.');
+        await message.reply('. Painel de regras 2 publicado/atualizado neste canal.');
         return;
       }
 
@@ -13382,7 +13376,7 @@ client.on(
               });
 
             voiceConnection.on('error', (error) => {
-              console.warn('[Voice] Erro na conex�o de voz:', error?.message || error);
+              console.warn('[Voice] Erro na conexo de voz:', error?.message || error);
               try { voiceConnection?.destroy(); } catch {}
               voiceConnection = null;
             });
@@ -13448,7 +13442,7 @@ client.on(
 
           await message.reply(
 
-            '�Y'< Sa� da call.'
+            '👋 Saí da call.'
 
           );
 
@@ -13488,7 +13482,7 @@ client.on(
 
         } else {
 
-          await message.reply('L O comando de DM n�o est� dispon�vel no momento.').catch(() => {});
+          await message.reply('L O comando de DM não está disponível no momento.').catch(() => {});
 
         }
 
@@ -13528,7 +13522,7 @@ client.on(
 
           await message.reply(
 
-            'L Voc� n�o possui `match.manage`.'
+            'L Você não possui `match.manage`.'
 
           );
 
@@ -13576,7 +13570,7 @@ client.on(
 
           await message.reply(
 
-            'L Voc� precisa ser administrador.'
+            'L Você precisa ser administrador.'
 
           );
 
@@ -13636,7 +13630,7 @@ client.on(
 
           await message.reply(
 
-            'L Voc� n�o possui `moderation.clear`.'
+            'L Você não possui `moderation.clear`.'
 
           );
 
@@ -13690,7 +13684,7 @@ client.on(
 
           await message.channel.send(
 
-            `=� ${deleted.size} mensagens apagadas.`
+            `= ${deleted.size} mensagens apagadas.`
 
           );
 
@@ -13742,7 +13736,7 @@ client.on(
 
           await message.reply(
 
-            'L Voc� n�o possui `moderation.ban`.'
+            'L Você não possui `moderation.ban`.'
 
           );
 
@@ -13764,7 +13758,7 @@ client.on(
 
           await message.reply(
 
-            'L Mencione um usu�rio.'
+            'L Mencione um usuário.'
 
           );
 
@@ -13790,7 +13784,7 @@ client.on(
 
           await message.reply(
 
-            'L Usu�rio n�o encontrado.'
+            'L Usurio não encontrado.'
 
           );
 
@@ -13824,7 +13818,7 @@ client.on(
 
         await message.reply(
 
-          `=� ${user.tag} foi banido.`
+          `= ${user.tag} foi banido.`
 
         );
 
@@ -13860,7 +13854,7 @@ client.on(
 
           await message.reply(
 
-            'L Voc� n�o possui `moderation.kick`.'
+            'L Você não possui `moderation.kick`.'
 
           );
 
@@ -13882,7 +13876,7 @@ client.on(
 
           await message.reply(
 
-            'L Mencione um usu�rio.'
+            'L Mencione um usuário.'
 
           );
 
@@ -13908,7 +13902,7 @@ client.on(
 
           await message.reply(
 
-            'L Usu�rio n�o encontrado.'
+            'L Usurio não encontrado.'
 
           );
 
@@ -14076,7 +14070,7 @@ client.on(
 
           await message.reply(
 
-            '�Y'< Como posso ajudar?'
+            '🤖 Como posso ajudar?'
 
           );
 
@@ -14315,7 +14309,7 @@ const server = http.createServer(
 
             error:
 
-              'Bot n�o est� em nenhum servidor.'
+              'Bot não está em nenhum servidor.'
 
           })
 
@@ -14474,19 +14468,3 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
