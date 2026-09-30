@@ -1,4 +1,4 @@
-require('dotenv').config();
+﻿require('dotenv').config();
 
 // Mant�m o processo vivo em rejei��es ass�ncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
@@ -721,16 +721,14 @@ const TEMP_VOICE_CONFIG_FILE =
 
 
 let tempVoiceConfig = {
-  title: '=
- Salas de Voz Tempor�rias',
+  title: 'Salas de Voz Temporárias',
   description:
     'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias s�o exclu�das automaticamente conforme o tempo configurado.',
   color: '#5865F2',
   banner: '',
   icon: '',
-  footer: 'Call Priv � Configura��o din�mica',
-  defaultName: '=
-=�{user}',
+  footer: 'Call Priv - Configuração dinâmica',
+  defaultName: '🔊 {user}',
   categoryId: TEMP_VOICE_CATEGORY_ID || '',
   deleteAfterMinutes: 5,
   userLimit: 0,
@@ -868,12 +866,10 @@ function resetTempVoiceConfig() {
   const panelChannelId = tempVoiceConfig.panelChannelId || '';
   const panelMessageId = tempVoiceConfig.panelMessageId || '';
   tempVoiceConfig = {
-    title: '=
- Salas de Voz Tempor�rias',
+    title: 'Salas de Voz Temporárias',
     description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias s�o exclu�das automaticamente conforme o tempo configurado.',
-    color: '#5865F2', banner: '', icon: '', footer: 'Call Priv � Configura��o din�mica',
-    defaultName: '=
-=�{user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
+    color: '#5865F2', banner: '', icon: '', footer: 'Call Priv - Configuração dinâmica',
+    defaultName: '🔊 {user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
     deleteAfterMinutes: 5, userLimit: 0,
     authorizedRoleId: COMMAND_ACCESS_ROLE_ID || '',
     options: { create: true, rename: true, lock: true, unlock: true, limit: true, kick: true, transfer: true, delete: true },
@@ -8653,9 +8649,7 @@ async function handleTempVoicePanelConfigSelect(interaction) {
   }
 
   const labels = { description:'Descri��o do painel', banner:'URL do banner', icon:'URL do �cone/thumbnail', title:'T�tulo do painel', color:'Cor do embed', footer:'Rodap� do painel', defaultName:'Nome padr�o das calls', categoryId:'ID da categoria das calls', deleteAfterMinutes:'Tempo para excluir sala vazia (minutos)', userLimit:'Limite padr�o de usu�rios', authorizedRoleId:'ID do cargo autorizado' };
-  const placeholders = { description:'Ex.: Crie e administre sua pr�pria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title:'=
- Salas de Voz Tempor�rias', color:'#5865F2', footer:'Call Priv � Configura��o din�mica', defaultName:'=
-=�{user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
+  const placeholders = { description:'Ex.: Crie e administre sua pr�pria sala...', banner:'https://exemplo.com/banner.png', icon:'https://exemplo.com/icone.png', title: 'Salas de Voz Temporárias', color:'#5865F2', footer: 'Call Priv - Configuração dinâmica', defaultName: '🔊 {user}', categoryId:'ID da categoria do Discord', deleteAfterMinutes:'5', userLimit:'0 = ilimitado', authorizedRoleId:'ID do cargo autorizado' };
   const modal = new ModalBuilder().setCustomId(`tempvoice_panel_config:${option}`).setTitle(labels[option]);
   const input = new TextInputBuilder().setCustomId('value').setLabel(labels[option]).setPlaceholder(placeholders[option]).setStyle(option === 'description' || option === 'footer' ? TextInputStyle.Paragraph : TextInputStyle.Short).setRequired(false).setMaxLength(option === 'description' ? 4000 : 1000);
   const current = String(tempVoiceConfig[option] ?? '');
@@ -14481,6 +14475,7 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
 
 
 
