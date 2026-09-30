@@ -3945,7 +3945,15 @@ async function findExistingRankCallPanel(channel) {
       })
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
-    return candidates[0] || null;
+    const selected = candidates[0] || null;
+
+    // Se houver mais de um painel do RankCall, mant�m somente o mais recente.
+    for (const duplicate of candidates.slice(1)) {
+      await duplicate.delete().catch(() => {});
+      console.log(`[RankCall] Painel duplicado removido: ${duplicate.id}`);
+    }
+
+    return selected;
   } catch (error) {
     console.warn('[RankCall] Não foi possível procurar painel existente:', error.message);
     return null;
