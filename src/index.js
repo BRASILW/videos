@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 
 // Mantm o processo vivo em rejeições assíncronas conhecidas do sistema de voz.
 process.on('unhandledRejection', (reason) => {
@@ -1301,133 +1301,204 @@ async function warnAboutAfkMention(message) {
   }, AFK_WARNING_DELETE_MS);
 }
 
+const processedAfkMessages = new Set();
 async function handleAfkPrefixCommand(message) {
+  if (!message?.id) {
+    return false;
+  }
+
+  // Impede que a mesma mensagem seja processada duas vezes
+  if (processedAfkMessages.has(message.id)) {
+    return true;
+  }
+
+  processedAfkMessages.add(message.id);
+
+  // Remove o ID da memória depois de 30 segundos
+  setTimeout(() => {
+    processedAfkMessages.delete(message.id);
+  }, 30000);
+
   const raw = String(message.content || '').trim();
+
   const match = raw.match(/^!(afk|unafk)(?:\s|$)/i);
-  if (!match) return false;
+
+  if (!match) {
+    processedAfkMessages.delete(message.id);
+    return false;
+  }
 
   const command = match[1].toLowerCase();
+
+  // Apaga o comando !afk / !unafk
   await message.delete().catch(() => {});
-  if (!message.guild) return true;
+
+  if (!message.guild) {
+    return true;
+  }
 
   const guild = message.guild;
-  const member = message.member || await guild.members.fetch(message.author.id).catch(() => null);
-  if (!member) return true;
-  const key = getAfkKey(guild.id, member.id);
+
+  const member =
+    message.member ||
+    await guild.members
+      .fetch(message.author.id)
+      .catch(() => null);
+
+  if (!member) {
+    return true;
+  }
+
+  const key = getAfkKey(
+    guild.id,
+    member.id
+  );
+
+  /*
+   * =========================================================
+   * ENTRAR NO AFK
+   * =========================================================
+   */
 
   if (command === 'afk') {
     if (afkUsers.has(key)) {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> já está no mundo AFK e não pode ser perturbado.`).catch(() => {});
+      await message.channel
+        .send(
+          `<a:luacancun2:1554021665934155796> <@${member.id}> já está no mundo AFK e não pode ser perturbado.`
+        )
+        .catch(() => {});
+
       return true;
     }
 
-    const originalNickname = member.nickname ?? null;
+    const originalNickname =
+      member.nickname ?? null;
+
     afkUsers.set(key, {
       guildId: guild.id,
       userId: member.id,
       originalNickname,
       activatedAt: Date.now()
     });
+
     saveAfkUsers();
 
-    await member.setNickname(
-      formatAfkNickname(originalNickname, member.user.username),
-      'Entrou no modo AFK'
-    ).catch(error => {
-      console.warn('[AFK] Não foi possível alterar o apelido:', error.message);
-    });
-
-    const afkChannel = guild.channels.cache.get(AFK_VOICE_CHANNEL_ID)
-      || await guild.channels.fetch(AFK_VOICE_CHANNEL_ID).catch(() => null);
-
-    const currentVoiceChannelId = member.voice?.channelId || null;
-
-    if (currentVoiceChannelId && currentVoiceChannelId !== AFK_VOICE_CHANNEL_ID && afkChannel?.isVoiceBased?.()) {
-      const confirmId = `${AFK_MOVE_CONFIRM_PREFIX}${guild.id}:${member.id}`;
-      const buttons = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`${confirmId}:yes`)
-          .setLabel('Sim')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId(`${confirmId}:no`)
-          .setLabel('Não')
-          .setStyle(ButtonStyle.Danger)
-      );
-
-      // A confirmaío precisa ser privada para quem executou !afk.
-      // Prefix commands não suportam mensagens ephemeral, ento enviamos a pergunta por DM.
-      await message.channel.send(
-        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`
-      ).catch(() => {});
-
-      const prompt = await member.user.send({
-        content: `<a:luacancun2:1554021665934155796> **@${member.displayName || member.user.username}** entrou no mundo AFK e não pode ser perturbado.\n\n=
- Você quer ser movido para **${afkChannel.name}**?`,
-        components: [buttons]
-      }).catch(error => {
-        console.warn('[AFK] Não foi possível enviar a confirmaío por DM:', error.message);
-        return null;
+    /*
+     * Tenta colocar [AFK] no apelido.
+     *
+     * Se o bot não tiver permissão, o AFK continua
+     * funcionando normalmente.
+     */
+    await member
+      .setNickname(
+        formatAfkNickname(
+          originalNickname,
+          member.user.username
+        ),
+        'Entrou no modo AFK'
+      )
+      .catch(error => {
+        console.warn(
+          '[AFK] Não foi possível alterar o apelido:',
+          error.message
+        );
       });
 
-      if (prompt) {
-        const timer = setTimeout(async () => {
-          const pending = pendingAfkMoveConfirmations.get(confirmId);
-          if (!pending || pending.messageId !== prompt.id) return;
-          pendingAfkMoveConfirmations.delete(confirmId);
-          const disabled = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId(`${confirmId}:yes`)
-              .setLabel('Sim')
-              .setStyle(ButtonStyle.Success)
-              .setDisabled(true),
-            new ButtonBuilder()
-              .setCustomId(`${confirmId}:no`)
-              .setLabel('Não')
-              .setStyle(ButtonStyle.Danger)
-              .setDisabled(true)
-          );
-          await prompt.edit({
-            content: `<a:luacancun2:1554021665934155796> Você entrou no mundo AFK e não pode ser perturbado.\n\n O tempo para escolher terminou. Você permaneceu na call atual.`,
-            components: [disabled]
-          }).catch(() => {});
-        }, AFK_MOVE_CONFIRM_TIMEOUT_MS);
+    /*
+     * Procura a call AFK configurada.
+     */
+    const afkChannel =
+      guild.channels.cache.get(
+        AFK_VOICE_CHANNEL_ID
+      ) ||
+      await guild.channels
+        .fetch(AFK_VOICE_CHANNEL_ID)
+        .catch(() => null);
 
-        pendingAfkMoveConfirmations.set(confirmId, {
-          guildId: guild.id,
-          userId: member.id,
-          messageId: prompt.id,
-          timer
-        });
-      }
-    } else {
-      await message.channel.send(`<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`).catch(() => {});
+    const currentVoiceChannelId =
+      member.voice?.channelId || null;
+
+    /*
+     * =========================================================
+     * MENSAGEM ÚNICA
+     * =========================================================
+     *
+     * NÃO envia mais DM.
+     */
+
+    await message.channel
+      .send(
+        `<a:luacancun2:1554021665934155796> <@${member.id}> entrou no mundo AFK e não pode ser perturbado.`
+      )
+      .catch(() => {});
+
+    /*
+     * Se já estiver em outra call, não tenta enviar DM
+     * nem abrir confirmação.
+     */
+    if (
+      currentVoiceChannelId &&
+      currentVoiceChannelId !== AFK_VOICE_CHANNEL_ID &&
+      afkChannel?.isVoiceBased?.()
+    ) {
+      console.log(
+        `[AFK] ${member.user.tag} entrou em AFK e permaneceu na call atual.`
+      );
     }
 
     return true;
   }
 
+  /*
+   * =========================================================
+   * SAIR DO AFK
+   * =========================================================
+   */
+
   const record = afkUsers.get(key);
+
   if (!record) {
-    await message.channel.send(`. <@${member.id}>, você não está no modo AFK.`).catch(() => {});
+    await message.channel
+      .send(
+        `<a:luacancun2:1554021665934155796> <@${member.id}>, você não está no modo AFK.`
+      )
+      .catch(() => {});
+
     return true;
   }
 
-  const confirmId = `${AFK_MOVE_CONFIRM_PREFIX}${guild.id}:${member.id}`;
-  const pending = pendingAfkMoveConfirmations.get(confirmId);
-  if (pending) {
-    clearTimeout(pending.timer);
-    pendingAfkMoveConfirmations.delete(confirmId);
-  }
-
+  /*
+   * Remove imediatamente da lista para impedir
+   * processamento duplicado.
+   */
   afkUsers.delete(key);
+
   saveAfkUsers();
 
-  await member.setNickname(record.originalNickname ?? null, 'Saiu do modo AFK').catch(error => {
-    console.warn('[AFK] Não foi possível restaurar o apelido:', error.message);
-  });
+  /*
+   * Restaura o apelido original.
+   */
+  await member
+    .setNickname(
+      record.originalNickname ?? null,
+      'Saiu do modo AFK'
+    )
+    .catch(error => {
+      console.warn(
+        '[AFK] Não foi possível restaurar o apelido:',
+        error.message
+      );
+    });
 
-  await message.channel.send(`~? <@${member.id}> saiu do mundo AFK e já pode ser mencionado novamente.`).catch(() => {});
+  /*
+   * Mensagem única de saída.
+   */
+  await message.channel
+    .send(
+      `<a:luacancun2:1554021665934155796> <@${member.id}> saiu do mundo AFK.`
+    )
+    .catch(() => {});
+
   return true;
 }
 
