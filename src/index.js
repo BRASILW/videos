@@ -885,7 +885,7 @@ let formulario;
 
 try {
 
-  formulario = require('./commands/formulario');
+  formulario = require('./formulario');
 
 } catch (e) {
 
@@ -907,7 +907,7 @@ let dmCommand;
 
 try {
 
-  dmCommand = require('./commands/dm');
+  dmCommand = require('./dm');
 
 } catch (e) {
 
@@ -1086,7 +1086,7 @@ const RANK_CALL_TIMEZONE =
 
     'America/Sao_Paulo';
 
-const RANK_CALL_STREAK_EMOJI = '<:fogo:1499961991215845466>';
+const RANK_CALL_STREAK_EMOJI = '<a:fogo:1554010995993608272>';
 const RANK_CALL_STREAK_MINUTES = 30;
 const RANK_CALL_STREAK_MIN_SECONDS = RANK_CALL_STREAK_MINUTES * 60;
 
@@ -1744,10 +1744,14 @@ function getLiveRankCallStreakRanking(guild) {
     const [guildId, userId] = key.split(':');
     if (guildId !== guild.id) continue;
 
+    // A sequência só fica ATIVA no painel depois que a pessoa
+    // completar 30 minutos acumulados de call no dia atual.
+    const todaySeconds = Number(streak?.dailySeconds?.[today] || 0);
+    const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
+
     // Repara automaticamente o painel caso o checkpoint tenha atualizado
     // dailySeconds mas a inclusão da data qualificada ainda não tenha ocorrido.
-    const todaySeconds = Number(streak?.dailySeconds?.[today] || 0);
-    if (todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS && !streak.dates.includes(today)) {
+    if (todayQualified && !streak.dates.includes(today)) {
       addRankCallQualifiedDate(streak, today);
       changed = true;
     }
@@ -1761,7 +1765,11 @@ function getLiveRankCallStreakRanking(guild) {
     streak.bestStreak = Math.max(Number(streak.bestStreak) || 0, Number(recalculated.bestStreak) || 0);
 
     const currentStreak = Number(streak.currentStreak) || 0;
-    if (currentStreak > 0) {
+
+    // Não exibe a sequência como ativa antes dos 30 minutos do dia.
+    // O histórico continua salvo normalmente; ao completar 30 min,
+    // a data de hoje é adicionada e a sequência volta a aparecer.
+    if (todayQualified && currentStreak > 0) {
       rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
     }
   }
@@ -13045,37 +13053,35 @@ client.on(
 
 
 
-      if (
-
-        content.startsWith(
-
-          '!dm '
-
-        )
-
-      ) {
+      if (/^!dm(?:\s|$)/i.test(content)) {
 
         if (dmCommand) {
+
+          const dmArgs = content
+
+            .replace(/^!dm\s*/i, '')
+
+            .trim()
+
+            .split(/\s+/)
+
+            .filter(Boolean);
 
           await dmCommand.execute(
 
             message,
 
-            content
-
-              .slice(4)
-
-              .trim()
-
-              .split(/\s+/),
+            dmArgs,
 
             client
 
           );
 
+        } else {
+
+          await message.reply('❌ O comando de DM não está disponível no momento.').catch(() => {});
+
         }
-
-
 
         return;
 
