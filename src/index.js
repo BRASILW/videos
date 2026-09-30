@@ -3806,14 +3806,10 @@ function buildRankCallRow(guild, row, index) {
   const callLabel = channel
     ? `${isCallPriv ? '🛠️ ' : ''}<#${channel.id}>${ownerId === row.userId ? ' • 👑 Dono' : ''}`
     : '🔇 Fora de call';
-  const streak = getRankCallStreak(guild.id, row.userId);
-  const streakLine = Number(streak?.currentStreak) > 0
-    ? `\n╰ ${RANK_CALL_STREAK_EMOJI} **Sequência: ${streak.currentStreak} ${streak.currentStreak === 1 ? 'dia' : 'dias'}**`
-    : '';
 
   return [
     `**${index + 1}.** ${userMention}`,
-    `╰ ⏱️ **${formatVoiceDuration(row.seconds)}** • 🔊 ${callLabel}${streakLine}`
+    `╰ ⏱️ **${formatVoiceDuration(row.seconds)}** • 🔊 ${callLabel}`
   ].join('\n');
 }
 
@@ -3953,10 +3949,17 @@ async function findExistingRankCallPanel(channel) {
       .sort((a, b) => b.createdTimestamp - a.createdTimestamp);
 
     // N�o reutiliza painel antigo.
-    // Todos os pain�is antigos encontrados ser�o removidos.
+    // Remove todos os pain�is antigos encontrados.
     for (const oldPanel of candidates) {
-      await oldPanel.delete().catch(() => {});
-      console.log(`[RankCall] Painel antigo removido: ${oldPanel.id}`);
+      try {
+        await oldPanel.delete();
+        console.log(`[RankCall] Painel antigo removido: ${oldPanel.id}`);
+      } catch (deleteError) {
+        console.error(
+          `[RankCall] ERRO ao apagar painel antigo ${oldPanel.id}:`,
+          deleteError?.message || deleteError
+        );
+      }
     }
 
     return null;
