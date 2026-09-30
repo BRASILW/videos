@@ -907,7 +907,7 @@ let dmCommand;
 
 try {
 
-  dmCommand = require('./dm');
+  dmCommand = require('./commands/dm');
 
 } catch (e) {
 
@@ -14015,41 +14015,42 @@ client.on(
         return;
 
       }
-
-
-
       if (/^!dm(?:\s|$)/i.test(content)) {
+        if (!global.__dmHandledMessages) {
+          global.__dmHandledMessages = new Set();
+        }
+
+        if (message?.id && global.__dmHandledMessages.has(message.id)) {
+          return;
+        }
+
+        if (message?.id) {
+          global.__dmHandledMessages.add(message.id);
+
+          setTimeout(() => {
+            global.__dmHandledMessages.delete(message.id);
+          }, 60000);
+        }
 
         if (dmCommand) {
-
           const dmArgs = content
-
             .replace(/^!dm\s*/i, '')
-
             .trim()
-
             .split(/\s+/)
-
             .filter(Boolean);
 
           await dmCommand.execute(
-
             message,
-
             dmArgs,
-
             client
-
           );
-
         } else {
-
-          await message.reply('L O comando de DM não está disponível no momento.').catch(() => {});
-
+          await message.reply(
+            '❌ O comando de DM não está disponível no momento.'
+          ).catch(() => {});
         }
 
         return;
-
       }
 
 

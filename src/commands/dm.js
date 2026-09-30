@@ -13,23 +13,28 @@ function canUseDmCommand(member) {
 
 async function execute(message, args = []) {
   if (!message?.guild || !message.member) {
-    await message?.reply?.('❌ Este comando só pode ser usado dentro do servidor.').catch(() => {});
+    await message?.reply?.(
+      '❌ Este comando só pode ser usado dentro do servidor.'
+    ).catch(() => {});
     return;
   }
 
   if (!canUseDmCommand(message.member)) {
-    await message.reply('❌ Você não possui permissão para usar o comando `!DM`.').catch(() => {});
+    await message.reply(
+      '❌ Você não possui permissão para usar o comando `!DM`.'
+    ).catch(() => {});
     return;
   }
 
   const target = message.mentions?.users?.first?.() || null;
 
   if (!target) {
-    await message.reply('❌ Use: `!DM @Pessoa sua mensagem aqui`').catch(() => {});
+    await message.reply(
+      '❌ Use: `!DM @Pessoa sua mensagem aqui`'
+    ).catch(() => {});
     return;
   }
 
-  // O primeiro argumento é a menção; o restante é o texto da mensagem.
   const messageText = args.slice(1).join(' ').trim();
 
   if (!messageText) {
@@ -40,20 +45,48 @@ async function execute(message, args = []) {
   }
 
   try {
-    await target.send({ content: messageText });
+    await target.send({
+      content: messageText
+    });
 
-    await message.reply(`✅ Mensagem enviada por PV para <@${target.id}>.`).catch(() => {});
+    const confirmation = await message.reply(
+      `✅ Mensagem enviada por PV para <@${target.id}>.`
+    ).catch(() => null);
+
+    if (confirmation) {
+      setTimeout(() => {
+        confirmation.delete().catch(() => {});
+      }, 3000);
+    }
   } catch (error) {
     if (error?.code === 50007) {
-      await message.reply(
+      const warning = await message.reply(
         '❌ Não foi possível enviar o PV. A pessoa pode estar com as mensagens diretas fechadas.'
-      ).catch(() => {});
+      ).catch(() => null);
+
+      if (warning) {
+        setTimeout(() => {
+          warning.delete().catch(() => {});
+        }, 5000);
+      }
+
       return;
     }
 
     console.error('[DM] Erro ao enviar PV:', error);
-    await message.reply('❌ Não foi possível enviar a mensagem por PV.').catch(() => {});
+
+    const warning = await message.reply(
+      '❌ Não foi possível enviar a mensagem por DM.'
+    ).catch(() => null);
+
+    if (warning) {
+      setTimeout(() => {
+        warning.delete().catch(() => {});
+      }, 5000);
+    }
   }
 }
 
-module.exports = { execute };
+module.exports = {
+  execute
+};
