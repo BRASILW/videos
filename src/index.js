@@ -2556,6 +2556,30 @@ async function q(
 
 
 
+async function syncLocalVoiceHoursToDatabase() {
+  if (!dbReady || !db || !voiceHoursLocal.size) return;
+
+  try {
+    for (const [key, secondsRaw] of voiceHoursLocal.entries()) {
+      const [guildId, userId] = String(key).split(':');
+      const seconds = Math.max(0, Math.floor(Number(secondsRaw) || 0));
+      if (!guildId || !userId || seconds <= 0) continue;
+
+      await q(`
+        INSERT INTO bot_users (guild_id, user_id, voice_seconds)
+        VALUES ($1,$2,$3)
+        ON CONFLICT (guild_id,user_id)
+        DO UPDATE SET
+          voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
+          last_seen = NOW()
+      `, [guildId, userId, seconds]);
+    }
+    console.log('[DB] Horas locais sincronizadas com PostgreSQL.');
+  } catch (error) {
+    console.error('[DB] Erro ao sincronizar horas locais:', error.message);
+  }
+}
+
 async function ensureUser(
 
   guild,
@@ -3912,8 +3936,9 @@ function buildLiveRankEmbed(guild, ranking, page = 0) {
     footer: `Ranking de horas • Página ${safePage + 1}/${totalPages} • Atualiza a cada 5 segundos  ${guild.name}`
   });
 
-  if (rankCallConfig.icon && /^https?:\/\//i.test(rankCallConfig.icon)) embed.setThumbnail(rankCallConfig.icon);
-  if (rankCallConfig.banner && /^https?:\/\//i.test(rankCallConfig.banner)) embed.setImage(rankCallConfig.banner);
+  // A sequência de fogo usa banner próprio e NÃO possui ícone/thumbnail.
+  const RANK_CALL_STREAK_BANNER = 'https://cdn.discordapp.com/attachments/1553979838698885200/1554936187612045404/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abeb2ac&is=6abd612c&hm=5e208e52231ae03a6e070f2f3994e1b3c6d60b36fb6651e9acc8c5b226509211&';
+  embed.setImage(RANK_CALL_STREAK_BANNER);
 
   return { embed, totalPages, safePage, userIds: rows.map(row => row.userId) };
 }
@@ -4496,7 +4521,9 @@ async function handleRankCallPrefixCommand(message) {
       }
       saveVoiceHoursLocal();
       saveVoiceSessionsLocal();
-      saveRankCallBackup('rankresetall');
+      if (dbReady) {
+        await q(`UPDATE bot_users SET voice_seconds = 0, last_seen = NOW() WHERE guild_id = $1`, [message.guild.id]);
+      }
       await refreshRankCallPanel();
       await message.channel.send('. Todas as horas de call deste servidor foram zeradas. As sequências de dias continuam salvas.').catch(() => {});
       return true;
@@ -4509,42 +4536,64 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     const key = `${message.guild.id}:${target.id}`;
-    const current = Number(voiceHoursLocal.get(key) || 0);
-    // Aceita a quantidade no formato usado pelo comando: !rankadd @usuario 2h
-    // Também mantém compatibilidade com o formato antigo sem o sufixo: !rankadd @usuario 2
-    const rawHours = parts.find(value => /^(?:\d+(?:[.,]\d+)?h?|\d+(?:[.,]\d+)?)$/i.test(value));
-    const normalizedHours = String(rawHours || '').trim().replace(/h$/i, '').replace(',', '.');
-    const hours = Number.parseFloat(normalizedHours || '0');
+    let current = Number(voiceHoursLocal.get(key) || 0);
 
-    if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0)) {
-      await message.channel.send('L Informe uma quantidade de horas vlida.').catch(() => {});
+    if (dbReady) {
+      const currentResult = await q(`
+        SELECT voice_seconds
+        FROM bot_users
+        WHERE guild_id = $1 AND user_id = $2
+      `, [message.guild.id, target.id]);
+      current = Number(currentResult?.rows?.[0]?.voice_seconds || current || 0);
+    }
+
+    const rawAmount = parts.find(value => /^(?:\d+(?:[.,]\d+)?)(?:h|hora|horas)?$/i.test(value));
+    const amountText = String(rawAmount || '').replace(/(?:h|hora|horas)$/i, '').replace(',', '.');
+    const hours = Number.parseFloat(amountText || '0');
+    const deltaSeconds = Math.round(hours * 3600);
+
+    if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0 || deltaSeconds < 0)) {
+      await message.channel.send('Informe uma quantidade de horas v�lida, por exemplo: `!rankadd @usu�rio 2h`.').catch(() => {});
       return true;
     }
 
+    let newSeconds = current;
+
     if (command === 'rankreset') {
-      voiceHoursLocal.delete(key);
+      newSeconds = 0;
       if (voiceSessions.has(key)) voiceSessions.set(key, Date.now());
     } else if (command === 'rankremove') {
-      voiceHoursLocal.set(key, Math.max(0, current - Math.round(hours * 3600)));
+      newSeconds = Math.max(0, current - deltaSeconds);
     } else if (command === 'rankadd') {
-      const addedSeconds = Math.max(0, Math.round(hours * 3600));
-      voiceHoursLocal.set(key, Math.max(0, current + addedSeconds));
-
-      // O !rankadd também precisa contar as horas adicionadas para a
-      // sequência do dia e persistir imediatamente no JSON.
-      if (addedSeconds > 0) {
-        const today = getRankCallDateKey();
-        addRankCallDailySeconds(message.guild.id, target.id, today, addedSeconds);
-        saveRankCallStreaks();
-        void evaluateRankCallStreaks();
-      }
+      newSeconds = Math.max(0, current + deltaSeconds);
     } else if (command === 'rankset') {
-      voiceHoursLocal.set(key, Math.max(0, Math.round(hours * 3600)));
+      newSeconds = Math.max(0, deltaSeconds);
       if (voiceSessions.has(key)) voiceSessions.set(key, Date.now());
     }
 
-    saveVoiceHoursLocal();
-    saveRankCallBackup(command);
+    voiceHoursLocal.set(key, newSeconds);
+
+    if (dbReady) {
+      await q(`
+        INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
+        VALUES ($1,$2,$3,$4,NOW())
+        ON CONFLICT (guild_id,user_id)
+        DO UPDATE SET
+          username = EXCLUDED.username,
+          voice_seconds = EXCLUDED.voice_seconds,
+          last_seen = NOW()
+      `, [message.guild.id, target.id, target.tag || target.username, newSeconds]);
+    } else {
+      saveVoiceHoursLocal();
+    }
+
+    if (command === 'rankadd' && deltaSeconds > 0) {
+      const today = getRankCallDateKey();
+      addRankCallDailySeconds(message.guild.id, target.id, today, deltaSeconds);
+    }
+
+    saveVoiceSessionsLocal();
+    saveRankCallStreaks();
     await refreshRankCallPanel();
     await message.channel.send(`. Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
     return true;
@@ -12002,6 +12051,7 @@ client.once(
 
 
     await initDB();
+    await syncLocalVoiceHoursToDatabase();
     await restoreRankCallVoiceSessionsFromDB();
 
 
@@ -12015,7 +12065,6 @@ client.once(
     initializeRankCallVoiceSessions();
     syncRankCallVoiceSessionsFromVoiceStates();
     checkpointLocalVoiceSessions();
-    startRankCallBackupScheduler();
     startRankCallAutoRefresh();
     await refreshRankCallPanel();
     await restoreAfkUsersOnReady();
@@ -14460,7 +14509,6 @@ function persistRankCallStateOnShutdown() {
     saveVoiceHoursLocal();
     saveVoiceSessionsLocal();
     saveRankCallStreaks();
-    saveRankCallBackup('shutdown');
   } catch {}
 }
 
