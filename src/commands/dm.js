@@ -4,6 +4,8 @@ const COMMAND_ACCESS_ROLE_ID =
   process.env.COMMAND_ACCESS_ROLE_ID ||
   '1552018175736946690';
 
+const handledMessages = new Set();
+
 function canUseDmCommand(member) {
   return Boolean(
     member?.permissions?.has(PermissionFlagsBits.Administrator) ||
@@ -11,36 +13,84 @@ function canUseDmCommand(member) {
   );
 }
 
+function markMessageAsHandled(message) {
+  const messageId = String(message?.id || '');
+
+  if (!messageId) {
+    return true;
+  }
+
+  if (handledMessages.has(messageId)) {
+    return false;
+  }
+
+  handledMessages.add(messageId);
+
+  setTimeout(() => {
+    handledMessages.delete(messageId);
+  }, 60000);
+
+  return true;
+}
+
+async function replyTemporary(message, content, delay = 5000) {
+  try {
+    const reply = await message.reply(content);
+
+    setTimeout(() => {
+      reply.delete().catch(() => {});
+    }, delay);
+
+    return reply;
+  } catch {
+    return null;
+  }
+}
+
 async function execute(message, args = []) {
+  if (!markMessageAsHandled(message)) {
+    return;
+  }
+
   if (!message?.guild || !message.member) {
-    await message?.reply?.(
+    await replyTemporary(
+      message,
       '❌ Este comando só pode ser usado dentro do servidor.'
-    ).catch(() => {});
+    );
     return;
   }
 
   if (!canUseDmCommand(message.member)) {
-    await message.reply(
+    await replyTemporary(
+      message,
       '❌ Você não possui permissão para usar o comando `!DM`.'
-    ).catch(() => {});
+    );
     return;
   }
 
-  const target = message.mentions?.users?.first?.() || null;
+  const target =
+    message.mentions?.users?.first?.() ||
+    null;
 
   if (!target) {
-    await message.reply(
+    await replyTemporary(
+      message,
       '❌ Use: `!DM @Pessoa sua mensagem aqui`'
-    ).catch(() => {});
+    );
     return;
   }
 
-  const messageText = args.slice(1).join(' ').trim();
+  const messageText =
+    args
+      .slice(1)
+      .join(' ')
+      .trim();
 
   if (!messageText) {
-    await message.reply(
+    await replyTemporary(
+      message,
       '❌ Informe a mensagem que será enviada. Exemplo: `!DM @Pessoa Olá, tudo bem?`'
-    ).catch(() => {});
+    );
     return;
   }
 
@@ -49,41 +99,29 @@ async function execute(message, args = []) {
       content: messageText
     });
 
-    const confirmation = await message.reply(
-      `✅ Mensagem enviada por PV para <@${target.id}>.`
-    ).catch(() => null);
-
-    if (confirmation) {
-      setTimeout(() => {
-        confirmation.delete().catch(() => {});
-      }, 3000);
-    }
+    await replyTemporary(
+      message,
+      `✅ Mensagem enviada por PV para <@${target.id}>.`,
+      3000
+    );
   } catch (error) {
     if (error?.code === 50007) {
-      const warning = await message.reply(
+      await replyTemporary(
+        message,
         '❌ Não foi possível enviar o PV. A pessoa pode estar com as mensagens diretas fechadas.'
-      ).catch(() => null);
-
-      if (warning) {
-        setTimeout(() => {
-          warning.delete().catch(() => {});
-        }, 5000);
-      }
-
+      );
       return;
     }
 
-    console.error('[DM] Erro ao enviar PV:', error);
+    console.error(
+      '[DM] Erro ao enviar PV:',
+      error
+    );
 
-    const warning = await message.reply(
+    await replyTemporary(
+      message,
       '❌ Não foi possível enviar a mensagem por DM.'
-    ).catch(() => null);
-
-    if (warning) {
-      setTimeout(() => {
-        warning.delete().catch(() => {});
-      }, 5000);
-    }
+    );
   }
 }
 
