@@ -3929,6 +3929,19 @@ async function findExistingRankCallPanel(channel) {
   try {
     const messages = await channel.messages.fetch({ limit: 100 });
     const botId = client.user?.id;
+
+    console.log(
+      `[RankCall] DEBUG: ${messages.size} mensagens encontradas | botId=${botId}`
+    );
+
+    for (const message of messages.values()) {
+      if (message.author?.id === botId && message.embeds?.length) {
+        console.log(
+          `[RankCall] DEBUG mensagem ${message.id} | título="${message.embeds[0]?.title || ''}" | footer="${message.embeds[0]?.footer?.text || ''}"`
+        );
+      }
+    }
+
     if (!botId) return null;
 
     const configuredTitle = String(
@@ -14127,4 +14140,5 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
 
