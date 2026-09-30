@@ -4002,6 +4002,10 @@ async function publishRankCallPanel(
 ) {
   const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
 
+  console.log(
+    `[RankCall] PAGE DEBUG | recebido=${page} | configAntes=${rankCallConfig.page} | streak=${streakPage}`
+  );
+
   if (!channel || !channel.isTextBased()) {
     throw new Error(
       `Canal RankCall ${RANK_CALL_CHANNEL_ID} não encontrado ou não é de texto.`
@@ -4161,6 +4165,10 @@ function buildRankCallConfigComponents() {
 
 async function sendRankCallConfigPanel(guild) {
   const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
+
+  console.log(
+    `[RankCall] PAGE DEBUG | recebido=${page} | configAntes=${rankCallConfig.page} | streak=${streakPage}`
+  );
   if (!channel?.isTextBased()) throw new Error('Canal do RankCall nÃ£o encontrado.');
   const message = await channel.send({
     embeds: [buildRankCallConfigEmbed()],
@@ -4266,6 +4274,10 @@ async function refreshRankCallPanel() {
     await syncRankCallStreaksFromVoiceStates();
 
     const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
+
+  console.log(
+    `[RankCall] PAGE DEBUG | recebido=${page} | configAntes=${rankCallConfig.page} | streak=${streakPage}`
+  );
     if (!channel?.isTextBased() || !channel.guild) return;
 
     // O painel Ã© persistente, mas a mensagem pode ter sido apagada manualmente.
@@ -14140,5 +14152,7 @@ process.on('SIGTERM', () => {
 });
 
 client.login(token);
+
+
 
 
