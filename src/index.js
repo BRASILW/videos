@@ -3808,7 +3808,7 @@ function buildRankCallRow(guild, row, index) {
 
   return [
     `**${index + 1}.** ${userMention}`,
-    `╰ ⏱️ **${formatVoiceDuration(row.seconds)}** • 🔊 ${callLabel}`
+    `╰ <:arrow1:1554152798071955477> <a:oceans6_clock:1554152778300002346> **${formatVoiceDuration(row.seconds)}** • <:audio_larp:1554688509715939350> ${callLabel}`
   ].join('\n');
 }
 
