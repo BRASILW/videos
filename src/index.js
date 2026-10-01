@@ -2248,23 +2248,30 @@ function normalizeHexColor(value) {
 
 
 
+function hasGeminiApiKey() {
+  const key = process.env.GEMINI_API_KEY?.trim();
+  return Boolean(key && !/^(?:opcional|cole_)/i.test(key));
+}
+
+function hasOpenAIApiKey() {
+  const key = process.env.OPENAI_API_KEY?.trim();
+  return Boolean(key && key.startsWith('sk-') && !key.includes('opcional'));
+}
+
 function getAIProvider() {
   const configured = String(process.env.AI_PROVIDER || '').trim().toLowerCase();
+  if (configured === 'openai' && !hasOpenAIApiKey() && hasGeminiApiKey()) {
+    return 'gemini';
+  }
   if (configured) return configured;
-  if (process.env.GEMINI_API_KEY?.trim()) return 'gemini';
+  if (hasGeminiApiKey()) return 'gemini';
   return 'openai';
 }
 
 function hasAIProvider() {
   const provider = getAIProvider();
-  if (provider === 'gemini') {
-    const key = process.env.GEMINI_API_KEY?.trim();
-    return Boolean(key && !/^(?:opcional|cole_)/i.test(key));
-  }
-  if (provider === 'openai') {
-    const key = process.env.OPENAI_API_KEY?.trim();
-    return Boolean(key && key.startsWith('sk-') && !key.includes('opcional'));
-  }
+  if (provider === 'gemini') return hasGeminiApiKey();
+  if (provider === 'openai') return hasOpenAIApiKey();
   return false;
 }
 
@@ -3594,7 +3601,7 @@ function buildModerationEmbed({ action, target, moderator, reason, duration, pro
   const isMute = action === 'mute';
   const isBan = action === 'ban';
   const embed = new EmbedBuilder()
-    .setColor(isMute ? '#F1C40F' : '#ED4245')
+    .setColor('#ED4245')
     .setTitle(
       isMute
         ? '🔇 Membro silenciado em canais de texto e voz'
@@ -3680,7 +3687,7 @@ function buildWelcomeEmbed(member, inviter) {
   const joinedAt = Math.floor((member.joinedTimestamp || Date.now()) / 1000);
 
   return new EmbedBuilder()
-    .setColor('#F1C40F')
+    .setColor('#ED4245')
     .setTitle('🎉 Novo membro no servidor')
     .addFields(
       { name: 'Usuário', value: member.user.username, inline: true },
@@ -3928,7 +3935,7 @@ async function askAI(
     throw new Error(provider === 'gemini'
       ? 'GEMINI_API_KEY não configurada. Crie uma chave gratuita no Google AI Studio e configure-a nas variáveis de ambiente.'
       : provider === 'openai'
-        ? 'OPENAI_API_KEY não configurada.'
+        ? 'Nenhuma chave de IA válida foi encontrada. Para usar o Gemini gratuito, configure GEMINI_API_KEY no Render e defina AI_PROVIDER=gemini.'
         : `Provedor de IA inválido: ${provider}. Use AI_PROVIDER=gemini ou AI_PROVIDER=openai.`);
   }
 
