@@ -594,6 +594,12 @@ const LOG_CHANNEL_ID =
 
   process.env.LOG_CHANNEL_ID || '';
 
+const MUTE_LOG_CHANNEL_ID =
+  process.env.MUTE_LOG_CHANNEL_ID || '';
+
+const BAN_LOG_CHANNEL_ID =
+  process.env.BAN_LOG_CHANNEL_ID || '';
+
 
 
 const DASHBOARD_KEY =
@@ -723,7 +729,7 @@ const TEMP_VOICE_CONFIG_FILE =
 let tempVoiceConfig = {
   title: 'Salas de Voz Temporárias',
   description:
-    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sóo excluídas automaticamente conforme o tempo configurado.',
+    'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias são excluídas automaticamente conforme o tempo configurado.',
   color: '#5865F2',
   banner: '',
   icon: '',
@@ -867,7 +873,7 @@ function resetTempVoiceConfig() {
   const panelMessageId = tempVoiceConfig.panelMessageId || '';
   tempVoiceConfig = {
     title: 'Salas de Voz Temporárias',
-    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias sóo excluídas automaticamente conforme o tempo configurado.',
+    description: 'Clique no menu abaixo para criar e administrar sua sala de voz.\n\nAs salas vazias são excluídas automaticamente conforme o tempo configurado.',
     color: '#5865F2', banner: '', icon: '', footer: 'Call Priv - Configuração dinâmica',
     defaultName: '🔊 {user}', categoryId: TEMP_VOICE_CATEGORY_ID || '',
     deleteAfterMinutes: 5, userLimit: 0,
@@ -1138,7 +1144,7 @@ const DEFAULT_RANK_CALL_CONFIG = {
   messageId: null,
   page: 0,
   title: 'Ranking de Macacos <:pureza_a:1553959213045121104>',
-  description: 'Acompanhe em tempo real quem  mais desempregado',
+  description: 'Acompanhe em tempo real as horas acumuladas em call.',
   color: '#000000',
   icon: '',
   banner: '',
@@ -1180,7 +1186,7 @@ function loadVoiceHoursLocal() {
     const data = JSON.parse(fs.readFileSync(VOICE_HOURS_FILE, 'utf8'));
     for (const [key, value] of Object.entries(data || {})) {
       const seconds = Number(value);
-      if (Number.isFinite(seconds) && seconds > 0) {
+      if (key.includes(':') && Number.isFinite(seconds) && seconds >= 0) {
         voiceHoursLocal.set(key, Math.floor(seconds));
       }
     }
@@ -1192,8 +1198,10 @@ function loadVoiceHoursLocal() {
 function saveVoiceHoursLocal() {
   try {
     fs.writeFileSync(VOICE_HOURS_FILE, JSON.stringify(Object.fromEntries(voiceHoursLocal), null, 2), 'utf8');
+    return true;
   } catch (e) {
     console.warn('[RankCall] Erro ao salvar horas locais:', e.message);
+    return false;
   }
 }
 
@@ -1260,7 +1268,7 @@ function getAfkRecord(guildId, userId) {
 }
 
 function formatAfkNickname(originalNickname, username) {
-  const original = String(originalNickname || username || 'Usurio').replace(/^AFK\s*\|\s*/i, '').trim();
+  const original = String(originalNickname || username || 'Usuário').replace(/^AFK\s*\|\s*/i, '').trim();
   const value = `${AFK_NICK_PREFIX}${original}`;
   return value.length > 32 ? value.slice(0, 32) : value;
 }
@@ -1883,7 +1891,7 @@ function getLiveRankCallStreakRanking(guild) {
     const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
 
     // Repara automaticamente o painel caso o checkpoint tenha atualizado
-    // dailySeconds mas a inclusóo da data qualificada ainda não tenha ocorrido.
+    // dailySeconds, mas a inclusão da data qualificada ainda não tenha ocorrido.
     if (todayQualified && !streak.dates.includes(today)) {
       addRankCallQualifiedDate(streak, today);
       changed = true;
@@ -1911,10 +1919,10 @@ function getLiveRankCallStreakRanking(guild) {
   return rows.sort((a, b) => b.streak - a.streak || b.bestStreak - a.bestStreak || a.userId.localeCompare(b.userId));
 }
 
-function saveRankCallBackup(reason = 'auto') {
+async function saveRankCallBackup(reason = 'auto') {
   try {
     fs.mkdirSync(RANK_CALL_BACKUP_DIR, { recursive: true });
-    checkpointLocalVoiceSessions();
+    await checkpointLocalVoiceSessions();
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const safeReason = String(reason || 'auto').replace(/[^a-z0-9_-]/gi, '_').slice(0, 40);
@@ -1953,20 +1961,29 @@ function saveRankCallBackup(reason = 'auto') {
 
 function startRankCallBackupScheduler() {
   if (rankCallBackupTimer) return;
-  saveRankCallBackup('startup');
-  rankCallBackupTimer = setInterval(() => saveRankCallBackup('auto'), 60 * 60 * 1000);
+  void saveRankCallBackup('startup');
+  rankCallBackupTimer = setInterval(() => void saveRankCallBackup('auto'), 60 * 60 * 1000);
 }
 
+let voiceCheckpointQueue = Promise.resolve();
+
 function checkpointLocalVoiceSessions() {
+  const checkpoint = voiceCheckpointQueue.then(() => performVoiceSessionCheckpoint());
+  voiceCheckpointQueue = checkpoint.catch((error) => {
+    console.error('[RankCall] Erro no checkpoint de voz:', error.message);
+  });
+  return checkpoint;
+}
+
+async function performVoiceSessionCheckpoint() {
   if (voiceSessions.size === 0) {
     if (!dbReady) saveVoiceSessionsLocal();
-    void evaluateRankCallStreaks();
+    await evaluateRankCallStreaks();
     return;
   }
 
   const now = Date.now();
   let sessionChanged = false;
-  let voiceHoursChanged = false;
   let streakChanged = false;
 
   for (const [key, startedAtRaw] of voiceSessions) {
@@ -1988,12 +2005,13 @@ function checkpointLocalVoiceSessions() {
       continue;
     }
 
-    if (addRankCallDailySecondsForInterval(guildId, userId, startedAt, now)) {
-      streakChanged = true;
-    }
+    const current = Number(voiceHoursLocal.get(key) || 0);
+    const totalSeconds = current + elapsedSeconds;
+    voiceHoursLocal.set(key, totalSeconds);
+    let databaseSaved = false;
 
     if (dbReady && db) {
-      q(`
+      const result = await q(`
         INSERT INTO bot_users (
           guild_id,
           user_id,
@@ -2004,29 +2022,34 @@ function checkpointLocalVoiceSessions() {
         VALUES ($1, $2, $3, $4, NOW())
         ON CONFLICT (guild_id, user_id)
         DO UPDATE SET
-          voice_seconds = bot_users.voice_seconds + EXCLUDED.voice_seconds,
+          voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
           username = EXCLUDED.username,
           last_seen = NOW()
+        RETURNING voice_seconds
       `, [
         guildId,
         userId,
         String(userId),
-        elapsedSeconds
-      ]).catch((error) => {
-        console.warn(
-          `[RankCall] Erro ao salvar ${guildId}:${userId} no banco:`,
-          error.message
-        );
-      });
-    } else {
-      const current = Number(voiceHoursLocal.get(key) || 0);
+        totalSeconds
+      ]);
+      if (result?.rows?.length) {
+        const persistedSeconds = Number(result.rows[0].voice_seconds || 0);
+        voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
+        databaseSaved = true;
+      } else {
+        console.warn(`[RankCall] Checkpoint de ${guildId}:${userId} não foi confirmado no banco; tentando manter no arquivo local.`);
+      }
+    }
 
-      voiceHoursLocal.set(
-        key,
-        current + elapsedSeconds
-      );
+    const localSaved = saveVoiceHoursLocal();
+    if (!databaseSaved && !localSaved) {
+      if (current > 0) voiceHoursLocal.set(key, current);
+      else voiceHoursLocal.delete(key);
+      continue;
+    }
 
-      voiceHoursChanged = true;
+    if (addRankCallDailySecondsForInterval(guildId, userId, startedAt, now)) {
+      streakChanged = true;
     }
 
     const newStartedAt = startedAt + elapsedSeconds * 1000;
@@ -2037,7 +2060,7 @@ function checkpointLocalVoiceSessions() {
     );
 
     if (dbReady && db) {
-      q(`
+      const sessionResult = await q(`
         UPDATE voice_sessions
         SET started_at = TO_TIMESTAMP($3 / 1000.0)
         WHERE guild_id = $1
@@ -2046,19 +2069,13 @@ function checkpointLocalVoiceSessions() {
         guildId,
         userId,
         newStartedAt
-      ]).catch((error) => {
-        console.warn(
-          `[RankCall] Erro ao atualizar checkpoint da sessão ${guildId}:${userId}:`,
-          error.message
-        );
-      });
+      ]);
+      if (!sessionResult) {
+        console.warn(`[RankCall] Checkpoint da sessão ${guildId}:${userId} não foi confirmado no banco.`);
+      }
     }
 
     sessionChanged = true;
-  }
-
-  if (voiceHoursChanged) {
-    saveVoiceHoursLocal();
   }
 
   if (sessionChanged) {
@@ -2069,7 +2086,7 @@ function checkpointLocalVoiceSessions() {
     saveRankCallStreaks();
   }
 
-  void evaluateRankCallStreaks(now);
+  await evaluateRankCallStreaks(now);
 }
 
 let voiceConnection = null;
@@ -2107,6 +2124,8 @@ const PERMISSIONS = [
   'moderation.kick',
 
   'moderation.ban',
+
+  'moderation.mute',
 
   'moderation.clear',
 
@@ -2862,6 +2881,11 @@ async function initDB() {
 
     `);
 
+    await db.query(`
+      ALTER TABLE bot_users
+        ADD COLUMN IF NOT EXISTS username TEXT,
+        ADD COLUMN IF NOT EXISTS voice_seconds BIGINT DEFAULT 0
+    `);
 
 
     dbReady = true;
@@ -2942,8 +2966,16 @@ async function restoreRankCallVoiceSessionsFromDB() {
       }
 
       const key = `${guildId}:${userId}`;
-
-      voiceSessions.set(key, startedAt);
+      const localStartedAt = Number(voiceSessions.get(key) || 0);
+      const restoredStartedAt = Math.max(startedAt, localStartedAt);
+      voiceSessions.set(key, restoredStartedAt);
+      if (restoredStartedAt > startedAt) {
+        await q(`
+          UPDATE voice_sessions
+          SET started_at = TO_TIMESTAMP($3 / 1000.0)
+          WHERE guild_id = $1 AND user_id = $2
+        `, [guildId, userId, restoredStartedAt]);
+      }
       restored++;
     }
 
@@ -2951,7 +2983,7 @@ async function restoreRankCallVoiceSessionsFromDB() {
 
     if (restored > 0 || removed > 0) {
       console.log(
-        `[RankCall] ${restored} sessóo(es) restaurada(s) e ${removed} sessóo(es) antiga(s) removida(s).`
+        `[RankCall] ${restored} sessão(ões) restaurada(s) e ${removed} sessão(ões) antiga(s) removida(s).`
       );
     }
   } catch (error) {
@@ -3008,24 +3040,49 @@ async function q(
 
 
 async function syncLocalVoiceHoursToDatabase() {
-  if (!dbReady || !db || !voiceHoursLocal.size) return;
+  if (!dbReady || !db) return;
 
   try {
     for (const [key, secondsRaw] of voiceHoursLocal.entries()) {
       const [guildId, userId] = String(key).split(':');
       const seconds = Math.max(0, Math.floor(Number(secondsRaw) || 0));
-      if (!guildId || !userId || seconds <= 0) continue;
+      if (!guildId || !userId) continue;
 
-      await q(`
-        INSERT INTO bot_users (guild_id, user_id, voice_seconds)
-        VALUES ($1,$2,$3)
-        ON CONFLICT (guild_id,user_id)
-        DO UPDATE SET
-          voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
-          last_seen = NOW()
-      `, [guildId, userId, seconds]);
+      if (seconds === 0) {
+        await q(`
+          INSERT INTO bot_users (guild_id, user_id, voice_seconds)
+          VALUES ($1,$2,0)
+          ON CONFLICT (guild_id,user_id)
+          DO UPDATE SET voice_seconds = 0, last_seen = NOW()
+        `, [guildId, userId]);
+      } else {
+        await q(`
+          INSERT INTO bot_users (guild_id, user_id, voice_seconds)
+          VALUES ($1,$2,$3)
+          ON CONFLICT (guild_id,user_id)
+          DO NOTHING
+        `, [guildId, userId, seconds]);
+      }
     }
-    console.log('[DB] Horas locais sincronizadas com PostgreSQL.');
+
+    const result = await q(`
+      SELECT guild_id, user_id, voice_seconds
+      FROM bot_users
+    `);
+    if (!result?.rows) {
+      console.warn('[DB] Não foi possível carregar as horas confirmadas do PostgreSQL.');
+      return;
+    }
+
+    for (const row of result.rows) {
+      const guildId = String(row.guild_id || '');
+      const userId = String(row.user_id || '');
+      const seconds = Number(row.voice_seconds);
+      if (!guildId || !userId || !Number.isFinite(seconds) || seconds < 0) continue;
+      voiceHoursLocal.set(`${guildId}:${userId}`, Math.floor(seconds));
+    }
+    saveVoiceHoursLocal();
+    console.log('[DB] Horas locais conciliadas com PostgreSQL.');
   } catch (error) {
     console.error('[DB] Erro ao sincronizar horas locais:', error.message);
   }
@@ -3487,6 +3544,282 @@ async function sendLog(
 
   }
 
+}
+
+function parseDiscordUserId(value) {
+  const match = String(value || '').trim().match(/^(?:<@!?(\d{15,22})>|(\d{15,22}))$/);
+  return match?.[1] || match?.[2] || null;
+}
+
+async function resolvePrefixUser(message, value) {
+  const targetId = parseDiscordUserId(value);
+  if (!targetId) return null;
+  return message.mentions.users.get(targetId) ||
+    await message.client.users.fetch(targetId).catch(() => null);
+}
+
+function parseModerationDuration(value) {
+  const input = String(value || '').trim();
+  const parts = [...input.matchAll(/(\d+)(s|m|h|d|w)/gi)];
+  if (!parts.length || parts.map(part => part[0]).join('').toLowerCase() !== input.toLowerCase()) {
+    return null;
+  }
+
+  const multipliers = { s: 1, m: 60, h: 3600, d: 86400, w: 604800 };
+  const seconds = parts.reduce(
+    (total, part) => total + Number(part[1]) * multipliers[part[2].toLowerCase()],
+    0
+  );
+  const milliseconds = seconds * 1000;
+  return Number.isSafeInteger(milliseconds) && milliseconds > 0 && milliseconds <= 28 * 86400 * 1000
+    ? milliseconds
+    : null;
+}
+
+function formatModerationDuration(milliseconds) {
+  const seconds = Math.floor(milliseconds / 1000);
+  const units = [
+    ['d', 86400],
+    ['h', 3600],
+    ['m', 60],
+    ['s', 1]
+  ];
+  let remainder = seconds;
+  const output = [];
+  for (const [label, size] of units) {
+    const amount = Math.floor(remainder / size);
+    if (amount > 0) output.push(`${amount}${label}`);
+    remainder %= size;
+  }
+  return output.join(' ');
+}
+
+function buildModerationEmbed({ action, target, moderator, reason, duration, proofs }) {
+  const isMute = action === 'mute';
+  const isBan = action === 'ban';
+  const embed = new EmbedBuilder()
+    .setColor(isMute ? '#F1C40F' : '#ED4245')
+    .setTitle(
+      isMute
+        ? '🔇 Membro silenciado em canais de texto e voz'
+        : isBan
+          ? '⛔ Membro banido'
+          : '👢 Membro expulso'
+    )
+    .addFields(
+      {
+        name: '👮 Moderador',
+        value: `${moderator} (\`${moderator.id}\`)`,
+        inline: true
+      },
+      {
+        name: '👤 Membro',
+        value: `${target} (\`${target.id}\`)`,
+        inline: true
+      },
+      ...(duration ? [{ name: '⏱️ Duração', value: formatModerationDuration(duration), inline: false }] : []),
+      { name: '📝 Motivo', value: String(reason || 'Não informado').slice(0, 1024), inline: false },
+      ...(proofs.length
+        ? [{
+            name: '📎 Prova',
+            value: proofs.map((proof, index) => `[${proof.name || `Prova ${index + 1}`}](${proof.url})`).join('\n').slice(0, 1024),
+            inline: false
+          }]
+        : [])
+    )
+    .setTimestamp();
+
+  if (target.displayAvatarURL) {
+    embed.setThumbnail(target.displayAvatarURL({ extension: 'png', size: 128 }));
+  }
+  return embed;
+}
+
+async function sendModerationEmbed(guild, payload) {
+  const configuredChannelId = payload.action === 'mute'
+    ? MUTE_LOG_CHANNEL_ID
+    : payload.action === 'ban'
+      ? BAN_LOG_CHANNEL_ID
+      : '';
+  const defaultName = payload.action === 'mute'
+    ? 'mute'
+    : payload.action === 'ban'
+      ? 'ban'
+      : null;
+  const namedChannel = defaultName
+    ? guild.channels.cache.find(
+        channel => channel.isTextBased() && channel.name?.toLowerCase() === defaultName
+      )
+    : null;
+  const logChannelId = configuredChannelId || namedChannel?.id || LOG_CHANNEL_ID;
+  if (!logChannelId) return false;
+
+  const channel = await guild.channels.fetch(logChannelId).catch(() => null);
+  if (!channel?.isTextBased()) {
+    console.warn(`[Moderation] Canal de log ${logChannelId} não encontrado ou não é de texto.`);
+    return false;
+  }
+
+  try {
+    await channel.send({
+      embeds: [buildModerationEmbed(payload)],
+      files: payload.proofs
+        .filter(proof => proof.attachment)
+        .map(proof => ({ attachment: proof.url, name: proof.name || 'prova' }))
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Moderation] Falha ao publicar o log de ${payload.action}:`, error.message);
+    return false;
+  }
+}
+
+function getPrefixProofs(message, text) {
+  const proofLinks = [];
+  const reasonParts = [];
+  for (const part of String(text || '').trim().split(/\s+/).filter(Boolean)) {
+    if (/^https?:\/\/\S+$/i.test(part)) {
+      proofLinks.push({ url: part, name: 'Prova por link' });
+    } else {
+      reasonParts.push(part);
+    }
+  }
+
+  const attachments = [...(message.attachments?.values?.() || [])].map(attachment => ({
+    url: attachment.url,
+    name: attachment.name || 'Prova anexada',
+    attachment: true
+  }));
+  return {
+    reason: reasonParts.join(' ').trim() || 'Não informado',
+    proofs: [...proofLinks, ...attachments]
+  };
+}
+
+async function handleModerationPrefixCommand(message, action) {
+  const permission = action === 'mute' ? 'moderation.mute' : `moderation.${action}`;
+  const replyPrivately = async content => {
+    try {
+      await message.author.send(content);
+    } catch (error) {
+      console.warn(`[Moderation] Não foi possível enviar confirmação privada: ${error.message}`);
+    }
+  };
+
+  await message.delete().catch(error => {
+    console.warn(`[Moderation] Não foi possível apagar o comando ${action}: ${error.message}`);
+  });
+
+  if (!(await requirePermission(message.member, permission))) {
+    await replyPrivately(`❌ Você não possui a permissão \`${permission}\`.`);
+    return;
+  }
+
+  const [, targetToken, ...args] = message.content.trim().split(/\s+/);
+  const target = await resolvePrefixUser(message, targetToken);
+  if (!target) {
+    await replyPrivately(`❌ Use: \`!${action} <menção ou ID> ${action === 'mute' ? '<duração> ' : ''}[motivo] [link de prova]\`.`);
+    return;
+  }
+  if (target.id === message.author.id || target.id === message.client.user.id) {
+    await replyPrivately('❌ Não é possível aplicar esta ação a você ou ao próprio bot.');
+    return;
+  }
+
+  let duration = null;
+  if (action === 'mute') {
+    duration = parseModerationDuration(args.shift());
+    if (!duration) {
+      await replyPrivately('❌ Informe uma duração válida, como `30m`, `4h`, `2d` ou `1w` (máximo de 28 dias).');
+      return;
+    }
+  }
+
+  const { reason, proofs } = getPrefixProofs(message, args.join(' '));
+  const member = await message.guild.members.fetch(target.id).catch(() => null);
+  if ((action === 'mute' || action === 'kick') && !member) {
+    await replyPrivately(`❌ O usuário precisa estar no servidor para receber ${action === 'mute' ? 'timeout' : 'expulsão'}.`);
+    return;
+  }
+
+  try {
+    const loggedReason = [
+      reason,
+      duration ? `Duração: ${formatModerationDuration(duration)}` : '',
+      ...proofs.map(proof => `Prova: ${proof.url}`)
+    ].filter(Boolean).join('\n');
+
+    if (action === 'mute') {
+      await member.timeout(duration, reason.slice(0, 480));
+    } else if (action === 'kick') {
+      await member.kick(reason.slice(0, 480));
+    } else {
+      await message.guild.members.ban(target.id, { reason: reason.slice(0, 480) });
+    }
+
+    await logModeration(message.guild.id, target.id, message.author.id, action, loggedReason);
+    const logSent = await sendModerationEmbed(message.guild, {
+      action,
+      target,
+      moderator: message.author,
+      reason,
+      duration,
+      proofs
+    });
+    const label = action === 'mute'
+      ? `silenciado por ${formatModerationDuration(duration)}`
+      : action === 'kick'
+        ? 'expulso'
+        : 'banido';
+    const logWarning = logSent
+      ? ''
+      : `\n⚠️ A ação foi aplicada, mas o registro não foi publicado. Configure ${action === 'mute' ? 'MUTE' : 'BAN'}_LOG_CHANNEL_ID ou LOG_CHANNEL_ID.`;
+    await replyPrivately(`✅ ${target.tag || target.username} foi ${label}.${logWarning}`);
+  } catch (error) {
+    console.error(`[Moderation] Falha ao executar ${action}:`, error);
+    await replyPrivately(`❌ Não foi possível executar ${action}: ${error.message}`);
+  }
+}
+
+async function handleHelpPrefixCommand(message) {
+  await message.delete().catch(error => {
+    console.warn(`[Help] Não foi possível apagar o comando: ${error.message}`);
+  });
+
+  const embed = new EmbedBuilder()
+    .setColor('#5865F2')
+    .setTitle('📖 Comandos do bot')
+    .setDescription('Você pode informar uma menção ou o ID do Discord sempre que o comando pedir um usuário.')
+    .addFields(
+      {
+        name: 'Geral',
+        value: '`!help`, `!ping`, `!oi`, `!regras2`, `!priv`'
+      },
+      {
+        name: 'Voz e RankCall',
+        value: '`!horascall [menção/ID]`, `!call [menção/ID]`, `!entrar`, `!sair`, `!rankcall`, `!rankrecreate`, `!rankconfig`, `!rankadd <menção/ID> <horas>`, `!rankremove <menção/ID> <horas>`, `!rankset <menção/ID> <horas>`, `!rankreset <menção/ID>`, `!rankresetall`'
+      },
+      {
+        name: 'Moderação',
+        value: '`!mute <menção/ID> <duração> [motivo] [link/anexo de prova]`, `!ban <menção/ID> [motivo] [link/anexo de prova]`, `!kick <menção/ID> [motivo]`, `!clear [quantidade]`, `!nuke`'
+      },
+      {
+        name: 'Mensagens e servidor',
+        value: '`!dm <menção/ID> <mensagem>`, `!match`, `!metch`, `!afk`, `!unafk`'
+      },
+      {
+        name: 'Exemplos',
+        value: '`!mute 123456789012345678 4h motivo do timeout` · `!ban 123456789012345678 motivo` · `!dm 123456789012345678 Olá!`'
+      }
+    )
+    .setFooter({ text: 'Durações de mute: 30m, 4h, 2d ou 1w; máximo de 28 dias.' });
+
+  try {
+    await message.author.send({ embeds: [embed] });
+  } catch (error) {
+    console.warn(`[Help] Não foi possível enviar a ajuda por DM: ${error.message}`);
+    await message.channel.send('📖 Não consegui enviar sua ajuda por DM. Ative mensagens diretas do servidor e tente `!help` novamente.').catch(() => {});
+  }
 }
 
 
@@ -4041,30 +4374,42 @@ async function updateVoiceSession(
     return;
   }
 
-  if (!dbReady) {
-    const current = Number(voiceHoursLocal.get(key) || 0);
-    voiceHoursLocal.set(key, current + seconds);
-    saveVoiceHoursLocal();
-    saveRankCallStreaks();
-    void evaluateRankCallStreaks(endedAt);
-    return;
-  }
+  const current = Number(voiceHoursLocal.get(key) || 0);
+  const totalSeconds = current + seconds;
+  voiceHoursLocal.set(key, totalSeconds);
+  saveVoiceHoursLocal();
 
-  await q(`
-    INSERT INTO bot_users (
-      guild_id,
-      user_id,
-      voice_seconds
-    )
-    VALUES ($1,$2,$3)
-    ON CONFLICT (guild_id,user_id)
-    DO UPDATE SET
-      voice_seconds = bot_users.voice_seconds + EXCLUDED.voice_seconds
-  `, [
-    guild.id,
-    member.id,
-    seconds
-  ]);
+  if (dbReady) {
+    const result = await q(`
+      INSERT INTO bot_users (
+        guild_id,
+        user_id,
+        username,
+        voice_seconds,
+        last_seen
+      )
+      VALUES ($1,$2,$3,$4,NOW())
+      ON CONFLICT (guild_id,user_id)
+      DO UPDATE SET
+        voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
+        username = EXCLUDED.username,
+        last_seen = NOW()
+      RETURNING voice_seconds
+    `, [
+      guild.id,
+      member.id,
+      member.user?.tag || member.user?.username || String(member.id),
+      totalSeconds
+    ]);
+
+    if (result?.rows?.length) {
+      const persistedSeconds = Number(result.rows[0].voice_seconds || 0);
+      voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
+      saveVoiceHoursLocal();
+    } else {
+      console.warn(`[RankCall] Horas de ${guild.id}:${member.id} mantidas localmente até a confirmação no banco.`);
+    }
+  }
 
   await q(`
     DELETE FROM voice_sessions
@@ -4110,6 +4455,7 @@ async function getLiveVoiceRanking(
         WHERE
 
           guild_id = $1
+          AND voice_seconds > 0
 
         `,
 
@@ -4192,6 +4538,13 @@ async function getLiveVoiceRanking(
 
     }
 
+  }
+
+  for (const [key, seconds] of voiceHoursLocal) {
+    const [guildId, userId] = key.split(':');
+    if (guildId === guild.id && Number(seconds) > 0) {
+      ranking.set(userId, Number(seconds) || 0);
+    }
   }
 
 
@@ -4897,7 +5250,7 @@ async function refreshRankCallPanel() {
     // Primeiro sincroniza quem está realmente em voz e transforma o tempo
     // acumulado desde o ltimo checkpoint em horas persistentes.
     syncRankCallVoiceSessionsFromVoiceStates();
-    checkpointLocalVoiceSessions();
+    await checkpointLocalVoiceSessions();
     await syncRankCallStreaksFromVoiceStates();
 
     const channel = await client.channels.fetch(RANK_CALL_CHANNEL_ID).catch(() => null);
@@ -4916,9 +5269,9 @@ async function refreshRankCallPanel() {
     // Log leve para confirmar no console que o relgio do RankCall continua
     // sendo processado, sem inundar o terminal.
     const active = [...voiceSessions.values()].length;
-    console.log(`[RankCall] Heartbeat OK  ${active} sessóo(es) ativas  ${new Date().toLocaleTimeString('pt-BR')}`);
+    console.log(`[RankCall] Heartbeat OK - ${active} sessão(ões) ativas - ${new Date().toLocaleTimeString('pt-BR')}`);
   } catch (error) {
-    console.error('[RankCall] Atualizaío automtica:', error.message);
+    console.error('[RankCall] Atualização automática:', error.message);
   } finally {
     rankCallRefreshInProgress = false;
   }
@@ -4933,7 +5286,7 @@ function startRankCallAutoRefresh() {
     void refreshRankCallPanel();
   }, 5000);
 
-  console.log('[RankCall] Atualizaío automtica a cada 5 segundos ativada.');
+  console.log('[RankCall] Atualização automática a cada 5 segundos ativada.');
 }
 
 async function handleRankCallPrefixCommand(message) {
@@ -4953,7 +5306,7 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     if (!isTempVoicePanelAdmin(message.member)) {
-      await message.channel.send('L Você não possui permissão para administrar o RankCall.').catch(() => {});
+      await message.channel.send('⚠️ Você não possui permissão para administrar o RankCall.').catch(() => {});
       return true;
     }
 
@@ -4968,80 +5321,147 @@ async function handleRankCallPrefixCommand(message) {
     }
 
     if (command === 'rankresetall') {
+      if (dbReady) {
+        const result = await q(
+          `WITH reset_hours AS (
+             UPDATE bot_users
+             SET voice_seconds = 0, last_seen = NOW()
+             WHERE guild_id = $1
+             RETURNING guild_id
+           ),
+           reset_sessions AS (
+             UPDATE voice_sessions
+             SET started_at = NOW()
+             WHERE guild_id = $1
+             RETURNING guild_id
+           )
+           SELECT 1`,
+          [message.guild.id]
+        );
+        if (!result) {
+          throw new Error('O banco não confirmou o reset; nenhuma hora foi alterada.');
+        }
+      }
+
       const prefix = `${message.guild.id}:`;
       for (const key of [...voiceHoursLocal.keys()]) {
-        if (key.startsWith(prefix)) voiceHoursLocal.delete(key);
+        if (key.startsWith(prefix)) voiceHoursLocal.set(key, 0);
       }
       const resetAt = Date.now();
       for (const key of [...voiceSessions.keys()]) {
         if (key.startsWith(prefix)) voiceSessions.set(key, resetAt);
       }
-      saveVoiceHoursLocal();
+      const localSaveSucceeded = saveVoiceHoursLocal();
       saveVoiceSessionsLocal();
-      if (dbReady) {
-        await q(`UPDATE bot_users SET voice_seconds = 0, last_seen = NOW() WHERE guild_id = $1`, [message.guild.id]);
+      if (!localSaveSucceeded && !dbReady) {
+        throw new Error('Não foi possível salvar o reset no arquivo local.');
       }
       await refreshRankCallPanel();
-      await message.channel.send('. Todas as horas de call deste servidor foram zeradas. As sequências de dias continuam salvas.').catch(() => {});
+      await message.channel.send('✅ Todas as horas de call deste servidor foram zeradas. As sequências de dias continuam salvas.').catch(() => {});
       return true;
     }
 
-    const target = message.mentions.users.first();
+    const target = await resolvePrefixUser(message, parts[0]);
     if (!target) {
-      await message.channel.send(`L Use !${command} @usuario${command === 'rankreset' ? '' : ' horas'}`).catch(() => {});
+      await message.channel.send(`⚠️ Use !${command} <menção ou ID>${command === 'rankreset' ? '' : ' horas'}`).catch(() => {});
       return true;
     }
+    parts.shift();
 
     const key = `${message.guild.id}:${target.id}`;
-    let current = Number(voiceHoursLocal.get(key) || 0);
-
-    if (dbReady) {
-      const currentResult = await q(`
-        SELECT voice_seconds
-        FROM bot_users
-        WHERE guild_id = $1 AND user_id = $2
-      `, [message.guild.id, target.id]);
-      current = Number(currentResult?.rows?.[0]?.voice_seconds || current || 0);
-    }
-
     const rawAmount = parts.find(value => /^(?:\d+(?:[.,]\d+)?)(?:h|hora|horas)?$/i.test(value));
     const amountText = String(rawAmount || '').replace(/(?:h|hora|horas)$/i, '').replace(',', '.');
     const hours = Number.parseFloat(amountText || '0');
     const deltaSeconds = Math.round(hours * 3600);
 
-    if (command !== 'rankreset' && (!Number.isFinite(hours) || hours < 0 || deltaSeconds < 0)) {
-      await message.channel.send('Informe uma quantidade de horas v�lida, por exemplo: `!rankadd @usu�rio 2h`.').catch(() => {});
+    if (command !== 'rankreset' && (!rawAmount || (
+      !Number.isFinite(hours) ||
+      hours < 0 ||
+      !Number.isSafeInteger(deltaSeconds) ||
+      deltaSeconds < 0
+    ))) {
+      await message.channel.send('Informe uma quantidade de horas válida, por exemplo: `!rankadd @usuário 2h`.').catch(() => {});
       return true;
     }
 
-    let newSeconds = current;
+    let newSeconds;
+    if (dbReady) {
+      const initialSeconds =
+        command === 'rankadd' || command === 'rankset'
+          ? deltaSeconds
+          : 0;
+      const result = await q(`
+        WITH saved_hours AS (
+          INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
+          VALUES ($1,$2,$3,$4,NOW())
+          ON CONFLICT (guild_id,user_id)
+          DO UPDATE SET
+            username = EXCLUDED.username,
+            voice_seconds = CASE $6
+              WHEN 'rankadd' THEN COALESCE(bot_users.voice_seconds, 0) + $7::bigint
+              WHEN 'rankremove' THEN GREATEST(0, COALESCE(bot_users.voice_seconds, 0) - $7::bigint)
+              WHEN 'rankset' THEN $7::bigint
+              WHEN 'rankreset' THEN 0
+            END,
+            last_seen = NOW()
+          RETURNING voice_seconds
+        ),
+        reset_session AS (
+          UPDATE voice_sessions
+          SET started_at = NOW()
+          WHERE guild_id = $1
+            AND user_id = $2
+            AND $5::boolean
+          RETURNING user_id
+        )
+        SELECT voice_seconds FROM saved_hours
+      `, [
+        message.guild.id,
+        target.id,
+        target.tag || target.username,
+        initialSeconds,
+        (command === 'rankreset' || command === 'rankset') && voiceSessions.has(key),
+        command,
+        deltaSeconds
+      ]);
+      if (!result?.rows?.length) {
+        throw new Error('O banco não confirmou a alteração das horas.');
+      }
+      newSeconds = Number(result.rows[0].voice_seconds);
+      if (!Number.isSafeInteger(newSeconds) || newSeconds < 0) {
+        throw new Error('A quantidade de horas ultrapassa o limite suportado.');
+      }
+      voiceHoursLocal.set(key, newSeconds);
+      saveVoiceHoursLocal();
+    } else {
+      const current = Number(voiceHoursLocal.get(key) || 0);
+      if (command === 'rankreset') {
+        newSeconds = 0;
+      } else if (command === 'rankremove') {
+        newSeconds = Math.max(0, current - deltaSeconds);
+      } else if (command === 'rankadd') {
+        newSeconds = Math.max(0, current + deltaSeconds);
+      } else {
+        newSeconds = deltaSeconds;
+      }
+      if (!Number.isSafeInteger(newSeconds) || newSeconds < 0) {
+        throw new Error('A quantidade de horas ultrapassa o limite suportado.');
+      }
 
-    if (command === 'rankreset') {
-      newSeconds = 0;
-      if (voiceSessions.has(key)) voiceSessions.set(key, Date.now());
-    } else if (command === 'rankremove') {
-      newSeconds = Math.max(0, current - deltaSeconds);
-    } else if (command === 'rankadd') {
-      newSeconds = Math.max(0, current + deltaSeconds);
-    } else if (command === 'rankset') {
-      newSeconds = Math.max(0, deltaSeconds);
-      if (voiceSessions.has(key)) voiceSessions.set(key, Date.now());
+      const previous = voiceHoursLocal.get(key);
+      voiceHoursLocal.set(key, newSeconds);
+      if (!saveVoiceHoursLocal()) {
+        if (previous === undefined) voiceHoursLocal.delete(key);
+        else voiceHoursLocal.set(key, previous);
+        throw new Error('Não foi possível salvar as horas no arquivo local.');
+      }
     }
 
-    voiceHoursLocal.set(key, newSeconds);
-
-    if (dbReady) {
-      await q(`
-        INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
-        VALUES ($1,$2,$3,$4,NOW())
-        ON CONFLICT (guild_id,user_id)
-        DO UPDATE SET
-          username = EXCLUDED.username,
-          voice_seconds = EXCLUDED.voice_seconds,
-          last_seen = NOW()
-      `, [message.guild.id, target.id, target.tag || target.username, newSeconds]);
-    } else {
-      saveVoiceHoursLocal();
+    if (
+      (command === 'rankreset' || command === 'rankset') &&
+      voiceSessions.has(key)
+    ) {
+      voiceSessions.set(key, Date.now());
     }
 
     if (command === 'rankadd' && deltaSeconds > 0) {
@@ -5052,11 +5472,11 @@ async function handleRankCallPrefixCommand(message) {
     saveVoiceSessionsLocal();
     saveRankCallStreaks();
     await refreshRankCallPanel();
-    await message.channel.send(`. Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
+    await message.channel.send(`✅ Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
     return true;
   } catch (error) {
     console.error('[RankCall]', error);
-    await message.channel.send(`L Erro no RankCall: ${error.message}`).catch(() => {});
+    await message.channel.send(`❌ Erro no RankCall: ${error.message}`).catch(() => {});
     return true;
   }
 }
@@ -5433,7 +5853,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '=d Membros',
+        name: '👥 Membros',
 
         value:
 
@@ -5523,7 +5943,7 @@ async function buildDashboardEmbed(
 
       {
 
-        name: '=d Mensagens',
+        name: '💬 Mensagens',
 
         value:
 
@@ -5557,7 +5977,7 @@ async function buildDashboardEmbed(
 
     footer:
 
-      'Atualizaío em tempo real'
+      'Atualização em tempo real'
 
   });
 
@@ -6281,7 +6701,7 @@ async function verifyMember(
 
     message.guild,
 
-    ` **Palavra bloqueada**\nUsurio: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
+    `⚠️ **Palavra bloqueada**\nUsuário: ${message.author.tag} (${message.author.id})\nCanal: <#${message.channel.id}>\nPalavra detectada: \`${found}\``
 
   );
 
@@ -6453,7 +6873,7 @@ Não considere simplesmente crticas, opinies ou discussóes normais como motivo 
 
       message.guild,
 
-      ` **Ateno da IA**\nUsurio: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma possível necessidade de atenção.'}\n\n> ${content.slice(0, 1000)}`
+      `⚠️ **Atenção da IA**\nUsuário: ${message.author} (${message.author.id})\nCanal: <#${message.channel.id}>\nSeveridade: **${data.severity || 'medium'}**\nMotivo: ${data.reason || 'A IA identificou uma possível necessidade de atenção.'}\n\n> ${content.slice(0, 1000)}`
 
     );
 
@@ -8557,7 +8977,7 @@ async function tempVoiceControl(
 
       content:
 
-        '=d Escolha o usuário:',
+        '👤 Escolha o usuário:',
 
       components: [
 
@@ -8925,7 +9345,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        'L Usurio não encontrado.',
+        '⚠️ Usuário não encontrado.',
 
       ephemeral: true
 
@@ -8983,7 +9403,7 @@ async function handleTempVoiceSelect(
 
       content:
 
-        `=d ${member} foi removido da sala.`,
+        `✅ ${member} foi removido da sala.`,
 
       components: []
 
@@ -9249,7 +9669,7 @@ async function handleTempVoicePanelConfigModal(interaction) {
   }
 
   normalizeTempVoiceConfig(); saveTempVoiceConfig(); await refreshTempVoicePanel(interaction.guild);
-  const names = { description:'Descrição', banner:'Banner', icon:'ícone/Thumbnail', title:'Título', color:'Cor', footer:'Rodapé', defaultName:'Nome padrão', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclusão automtica', userLimit:'Limite padrão', authorizedRoleId:'Permissóo de configuração' };
+  const names = { description:'Descrição', banner:'Banner', icon:'Ícone/thumbnail', title:'Título', color:'Cor', footer:'Rodapé', defaultName:'Nome padrão', categoryId:'Categoria', deleteAfterMinutes:'Tempo de exclusão automática', userLimit:'Limite padrão', authorizedRoleId:'Permissão de configuração' };
   return interaction.editReply({ content:`. ${names[option] || option} atualizado e aplicado em tempo real.` });
 }
 
@@ -9670,7 +10090,7 @@ async function createMatchProfile(
 
         {
 
-          name: '=d Nome',
+          name: '👤 Nome',
 
           value: nome,
 
@@ -9710,7 +10130,7 @@ async function createMatchProfile(
 
         {
 
-          name: '=d Discord',
+          name: '💬 Discord',
 
           value:
 
@@ -10418,6 +10838,47 @@ async function registerCommands() {
 
     new SlashCommandBuilder()
 
+      .setName('mute')
+
+      .setDescription('Aplica timeout em canais de texto e voz por uma duração definida.')
+
+      .addUserOption(option =>
+        option
+          .setName('usuario')
+          .setDescription('Membro a silenciar.')
+          .setRequired(true)
+      )
+
+      .addStringOption(option =>
+        option
+          .setName('duracao')
+          .setDescription('Ex.: 30m, 4h, 2d ou 1w (máximo 28 dias).')
+          .setRequired(true)
+      )
+
+      .addStringOption(option =>
+        option
+          .setName('motivo')
+          .setDescription('Motivo do timeout.')
+          .setRequired(false)
+      )
+
+      .addStringOption(option =>
+        option
+          .setName('prova')
+          .setDescription('Link opcional de prova.')
+          .setRequired(false)
+      )
+
+      .addAttachmentOption(option =>
+        option
+          .setName('anexo')
+          .setDescription('Anexo opcional de prova.')
+          .setRequired(false)
+      ),
+
+    new SlashCommandBuilder()
+
       .setName('kick')
 
       .setDescription(
@@ -10434,7 +10895,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usurio.'
+            'Usuário.'
 
           )
 
@@ -10443,11 +10904,8 @@ async function registerCommands() {
       )
 
       .addStringOption(option =>
-
         option
-
           .setName('motivo')
-
           .setDescription(
 
             'Motivo.'
@@ -10455,7 +10913,6 @@ async function registerCommands() {
           )
 
           .setRequired(false)
-
       ),
 
 
@@ -10478,7 +10935,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usurio.'
+            'Usuário.'
 
           )
 
@@ -10487,7 +10944,6 @@ async function registerCommands() {
       )
 
       .addStringOption(option =>
-
         option
 
           .setName('motivo')
@@ -10500,6 +10956,18 @@ async function registerCommands() {
 
           .setRequired(false)
 
+      )
+      .addStringOption(option =>
+        option
+          .setName('prova')
+          .setDescription('Link opcional de prova.')
+          .setRequired(false)
+      )
+      .addAttachmentOption(option =>
+        option
+          .setName('anexo')
+          .setDescription('Anexo opcional de prova.')
+          .setRequired(false)
       ),
 
 
@@ -10558,7 +11026,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usurio.'
+                'Usuário.'
 
               )
 
@@ -10604,7 +11072,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Usurio.'
+                'Usuário.'
 
               )
 
@@ -10726,7 +11194,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usurio.'
+            'Usuário.'
 
           )
 
@@ -10754,7 +11222,7 @@ async function registerCommands() {
 
           .setDescription(
 
-            'Usurio.'
+            'Usuário.'
 
           )
 
@@ -10931,7 +11399,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permissóo.'
+                'Permissão.'
 
               )
 
@@ -10993,7 +11461,7 @@ async function registerCommands() {
 
               .setDescription(
 
-                'Permissóo.'
+                'Permissão.'
 
               )
 
@@ -11940,21 +12408,14 @@ async function handleSlashCommand(
 
 
 
-  if (
-
-    command === 'kick' ||
-
-    command === 'ban'
-
-  ) {
+  if (command === 'kick' || command === 'ban' || command === 'mute') {
 
     const permission =
-
       command === 'kick'
-
         ? 'moderation.kick'
-
-        : 'moderation.ban';
+        : command === 'mute'
+          ? 'moderation.mute'
+          : 'moderation.ban';
 
 
 
@@ -12006,19 +12467,44 @@ async function handleSlashCommand(
 
       'Sem motivo informado';
 
+    const durationText = command === 'mute'
+      ? interaction.options.getString('duracao', true)
+      : null;
+    const duration = durationText ? parseModerationDuration(durationText) : null;
+    if (command === 'mute' && !duration) {
+      return interaction.reply({
+        content: '❌ Duração inválida. Use `30m`, `4h`, `2d` ou `1w` (máximo 28 dias).',
+        ephemeral: true
+      });
+    }
 
+    const proofLink = interaction.options.getString('prova');
+    if (proofLink && !/^https?:\/\/\S+$/i.test(proofLink)) {
+      return interaction.reply({
+        content: '❌ O link de prova precisa começar com http:// ou https://.',
+        ephemeral: true
+      });
+    }
+    const proofAttachment = interaction.options.getAttachment('anexo');
+    const proofs = [
+      ...(proofLink ? [{ url: proofLink, name: 'Prova por link' }] : []),
+      ...(proofAttachment ? [{
+        url: proofAttachment.url,
+        name: proofAttachment.name || 'Prova anexada',
+        attachment: true
+      }] : [])
+    ];
 
-    const member =
-
+    const member = command === 'ban'
+      ? null
+      :
       await interaction.guild.members
 
         .fetch(user.id)
 
         .catch(() => null);
 
-
-
-    if (!member) {
+    if (command !== 'ban' && !member) {
 
       return interaction.reply({
 
@@ -12040,17 +12526,21 @@ async function handleSlashCommand(
 
         await member.kick(reason);
 
+      } else if (command === 'mute') {
+
+        await member.timeout(duration, reason.slice(0, 480));
+
       } else {
 
-        await member.ban({
-
-          reason
-
-        });
+        await interaction.guild.members.ban(user.id, { reason: reason.slice(0, 480) });
 
       }
 
-
+      const loggedReason = [
+        reason,
+        duration ? `Duração: ${formatModerationDuration(duration)}` : '',
+        ...proofs.map(proof => `Prova: ${proof.url}`)
+      ].filter(Boolean).join('\n');
 
       await logModeration(
 
@@ -12062,27 +12552,27 @@ async function handleSlashCommand(
 
         command,
 
-        reason
+        loggedReason
 
       );
-
-
-
-      await sendLog(
-
-        interaction.guild,
-
-        ` **${command.toUpperCase()}**\nUsurio: ${user}\nModerador: ${interaction.user}\nMotivo: ${reason}`
-
-      );
-
-
+      const logSent = await sendModerationEmbed(interaction.guild, {
+        action: command,
+        target: user,
+        moderator: interaction.user,
+        reason,
+        duration,
+        proofs
+      });
 
       return interaction.reply({
 
-        content:
-
-          `. ${user.tag} foi ${command === 'kick' ? 'expulso' : 'banido'}.`,
+        content: `✅ ${user.tag} foi ${
+          command === 'kick'
+            ? 'expulso'
+            : command === 'mute'
+              ? `silenciado por ${formatModerationDuration(duration)}`
+              : 'banido'
+        }.${logSent ? '' : '\n⚠️ A ação foi aplicada, mas o log não foi publicado. Configure MUTE_LOG_CHANNEL_ID, BAN_LOG_CHANNEL_ID ou LOG_CHANNEL_ID.'}`,
 
         ephemeral: true
 
@@ -12570,7 +13060,7 @@ client.once(
 
     initializeRankCallVoiceSessions();
     syncRankCallVoiceSessionsFromVoiceStates();
-    checkpointLocalVoiceSessions();
+    await checkpointLocalVoiceSessions();
     startRankCallAutoRefresh();
     await refreshRankCallPanel();
     await restoreAfkUsersOnReady();
@@ -12806,7 +13296,7 @@ client.on(
       ) {
         const modal = new ModalBuilder()
           .setCustomId('rankcall_general_id_modal')
-          .setTitle('Y"Z Consultar por ID');
+          .setTitle('🆔 Consultar por ID');
 
         const idInput = new TextInputBuilder()
           .setCustomId('user_id')
@@ -13616,26 +14106,26 @@ async function forwardIncomingDmToLog(message) {
 
     const logChannel = await client.channels.fetch(DM_LOG_CHANNEL_ID).catch(() => null);
     if (!logChannel?.isTextBased()) {
-      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} não encontrado ou não  de texto.`);
+      console.warn(`[DM Log] Canal ${DM_LOG_CHANNEL_ID} não encontrado ou não é de texto.`);
       return true;
     }
 
-    const content = message.content?.trim() || '*Sem texto " veja os anexos abaixo.*';
+    const content = message.content?.trim() || '*Sem texto; veja os anexos abaixo.*';
     const attachmentLines = [...message.attachments.values()].map(
-      attachment => `Y"Z [${attachment.name || 'arquivo'}](${attachment.url})`
+      attachment => `📎 [${attachment.name || 'arquivo'}](${attachment.url})`
     );
 
     const description = [
-      `=d **Usurio:** ${message.author.tag || message.author.username}`,
-      `Y?" **ID:** \`${message.author.id}\``,
+      `👤 **Usuário:** ${message.author.tag || message.author.username}`,
+      `🆔 **ID:** \`${message.author.id}\``,
       '',
-      '=d **Mensagem:**',
+      '💬 **Mensagem:**',
       content,
       attachmentLines.length ? `\n${attachmentLines.join('\n')}` : ''
     ].filter(Boolean).join('\n').slice(0, 4096);
 
     const embed = new EmbedBuilder()
-      .setTitle('= Nova mensagem recebida no PV')
+      .setTitle('Nova mensagem recebida no PV')
       .setDescription(description)
       .setColor('#5865F2')
       .setTimestamp(message.createdAt || new Date());
@@ -13689,6 +14179,16 @@ client.on(
         message.content?.trim().toLowerCase() === '!rankconfig'
       ) {
         await handleRankCallPrefixCommand(message);
+        return;
+      }
+
+      const prefixCommand = message.content?.trim().match(/^!(\S+)/)?.[1]?.toLowerCase();
+      if (prefixCommand === 'help') {
+        await handleHelpPrefixCommand(message);
+        return;
+      }
+      if (prefixCommand === 'mute' || prefixCommand === 'ban' || prefixCommand === 'kick') {
+        await handleModerationPrefixCommand(message, prefixCommand);
         return;
       }
 
@@ -13844,18 +14344,15 @@ client.on(
         )
 
       ) {
+        const targetToken = content.split(/\s+/)[1];
+        const target = targetToken
+          ? await resolvePrefixUser(message, targetToken)
+          : message.author;
 
-        const mentioned =
-
-          message.mentions.users.first();
-
-
-
-        const target =
-
-          mentioned ||
-
-          message.author;
+        if (!target) {
+          await message.reply('⚠️ Não encontrei esse usuário. Informe uma menção ou um ID válido.');
+          return;
+        }
 
 
 
@@ -14045,9 +14542,10 @@ client.on(
             client
           );
         } else {
-          await message.reply(
-            '❌ O comando de DM não está disponível no momento.'
-          ).catch(() => {});
+          await message.delete().catch(() => {});
+          await message.author.send('❌ O comando de DM não está disponível no momento.').catch(error => {
+            console.warn('[DM] Não foi possível enviar uma resposta privada:', error.message);
+          });
         }
 
         return;
@@ -14157,7 +14655,7 @@ client.on(
 
         await cloned.send(
 
-          '=d Canal recriado com sucesso.'
+          '✅ Canal recriado com sucesso.'
 
         );
 
@@ -14347,7 +14845,7 @@ client.on(
 
           await message.reply(
 
-            'L Usurio não encontrado.'
+            '⚠️ Usuário não encontrado.'
 
           );
 
@@ -14465,7 +14963,7 @@ client.on(
 
           await message.reply(
 
-            'L Usurio não encontrado.'
+            '⚠️ Usuário não encontrado.'
 
           );
 
@@ -14487,7 +14985,7 @@ client.on(
 
         await message.reply(
 
-          `=d ${user.tag} foi expulso.`
+          `✅ ${user.tag} foi expulso.`
 
         );
 
@@ -15008,25 +15506,33 @@ process.on(
 
 let persistenceShutdownStarted = false;
 
-function persistRankCallStateOnShutdown() {
+async function persistRankCallStateOnShutdown() {
   if (persistenceShutdownStarted) return;
   persistenceShutdownStarted = true;
   try {
-    checkpointLocalVoiceSessions();
-    saveVoiceHoursLocal();
-    saveVoiceSessionsLocal();
-    saveRankCallStreaks();
-  } catch {}
+    await checkpointLocalVoiceSessions();
+  } catch (error) {
+    console.error('[RankCall] Não foi possível concluir o checkpoint ao encerrar:', error.message);
+  }
+  saveVoiceHoursLocal();
+  saveVoiceSessionsLocal();
+  saveRankCallStreaks();
 }
 
-process.on('SIGINT', () => {
-  persistRankCallStateOnShutdown();
-  process.exit(0);
+process.on('SIGINT', async () => {
+  try {
+    await persistRankCallStateOnShutdown();
+  } finally {
+    process.exit(0);
+  }
 });
 
-process.on('SIGTERM', () => {
-  persistRankCallStateOnShutdown();
-  process.exit(0);
+process.on('SIGTERM', async () => {
+  try {
+    await persistRankCallStateOnShutdown();
+  } finally {
+    process.exit(0);
+  }
 });
 
 client.login(token);

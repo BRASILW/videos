@@ -23,7 +23,13 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 ## Funcoes
 
-Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
+Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
+
+Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
+
+`!mute <usuario> <duracao> [motivo] [link de prova]` usa o timeout nativo do Discord, bloqueando mensagens e voz pelo tempo indicado. Duracoes aceitas incluem `30m`, `4h`, `2d` e `1w`, ate o limite de 28 dias. Tambem e possivel anexar a prova na mensagem do comando. `!ban <usuario> [motivo] [link de prova]` aceita prova opcional da mesma forma. Slash `/mute` e `/ban` tambem oferecem campos de link e anexo.
+
+Configure `MUTE_LOG_CHANNEL_ID` e `BAN_LOG_CHANNEL_ID` para canais de registro diferentes. Sem esses IDs, o bot tenta encontrar `#mute` e `#ban`, e depois usa `LOG_CHANNEL_ID`. Os comandos `!dm` apagam a mensagem do canal antes de enviar o PV, e enviam a confirmacao/erros por mensagem direta ao moderador. Para isso, o bot precisa de permissao para gerenciar mensagens no canal, e o moderador precisa aceitar mensagens diretas do bot.
 
 No canal `1551729250615304304`, o bot responde automaticamente as mensagens usando `OPENAI_API_KEY`. Configure essa chave no ambiente do Render; ela nunca deve ser enviada ao GitHub.
 
