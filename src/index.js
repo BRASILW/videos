@@ -28,6 +28,8 @@ const {
 
   ActionRowBuilder,
 
+  ActivityType,
+
   ButtonBuilder,
 
   ButtonStyle,
@@ -79,6 +81,11 @@ const {
 } = require('@discordjs/voice');
 
 const { MusicController } = require('./music');
+const {
+  downloadPack,
+  summarizeUploadResults,
+  uploadPack
+} = require('./pack-upload');
 
 
 
@@ -947,7 +954,191 @@ const client = new Client({
 
 });
 
-const musicController = new MusicController(client);
+const BOT_PRESENCE_FILE = path.join(__dirname, 'bot-presence.json');
+const BOT_ACTIVITY_TYPES = {
+  playing: ActivityType.Playing,
+  listening: ActivityType.Listening,
+  watching: ActivityType.Watching,
+  competing: ActivityType.Competing
+};
+const BOT_PRESENCE_STATUSES = new Set(['online', 'idle', 'dnd', 'invisible']);
+let musicController = null;
+
+function normalizeBotPresence(value) {
+  const status = String(value?.status || 'online').toLowerCase();
+  const activityType = String(value?.activityType || 'playing').toLowerCase();
+  const activityText = String(value?.activityText || '').trim().slice(0, 128);
+  return {
+    status: BOT_PRESENCE_STATUSES.has(status) ? status : 'online',
+    activityType: Object.hasOwn(BOT_ACTIVITY_TYPES, activityType) ? activityType : 'playing',
+    activityText
+  };
+}
+
+let botPresenceConfig = normalizeBotPresence({
+  status: process.env.BOT_STATUS,
+  activityType: process.env.BOT_ACTIVITY_TYPE,
+  activityText: process.env.BOT_ACTIVITY_TEXT
+});
+
+try {
+  if (fs.existsSync(BOT_PRESENCE_FILE)) {
+    botPresenceConfig = normalizeBotPresence({
+      ...botPresenceConfig,
+      ...JSON.parse(fs.readFileSync(BOT_PRESENCE_FILE, 'utf8'))
+    });
+  }
+} catch (error) {
+  console.warn('[Presence] Não foi possível carregar o status local:', error.message);
+}
+
+function applyBotPresence() {
+  if (!client.user) return;
+  const activeTrack = musicController
+    ? [...musicController.queues.values()].find(state => state.current)?.current
+    : null;
+  const activities = activeTrack
+    ? [{
+        name: String(activeTrack.track.info.title).slice(0, 128),
+        type: ActivityType.Listening
+      }]
+    : botPresenceConfig.activityText
+    ? [{
+        name: botPresenceConfig.activityText,
+        type: BOT_ACTIVITY_TYPES[botPresenceConfig.activityType]
+      }]
+    : [];
+  client.user.setPresence({
+    status: botPresenceConfig.status,
+    activities
+  });
+}
+
+function applyMusicPresence(trackTitle) {
+  if (!client.user) return;
+  if (!trackTitle) {
+    applyBotPresence();
+    return;
+  }
+  client.user.setPresence({
+    status: botPresenceConfig.status,
+    activities: [{
+      name: String(trackTitle).slice(0, 128),
+      type: ActivityType.Listening
+    }]
+  });
+}
+
+async function saveBotPresenceConfig(config) {
+  botPresenceConfig = normalizeBotPresence(config);
+  try {
+    fs.writeFileSync(BOT_PRESENCE_FILE, JSON.stringify(botPresenceConfig, null, 2), 'utf8');
+  } catch (error) {
+    console.warn('[Presence] Não foi possível salvar status localmente:', error.message);
+  }
+
+  if (dbReady && db) {
+    const result = await q(`
+      INSERT INTO bot_settings (setting_key, setting_value, updated_at)
+      VALUES ('presence', $1::jsonb, NOW())
+      ON CONFLICT (setting_key)
+      DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
+    `, [JSON.stringify(botPresenceConfig)]);
+    if (!result) {
+      throw new Error('O status foi alterado nesta sessão, mas não foi salvo no PostgreSQL.');
+    }
+  }
+  applyBotPresence();
+  return botPresenceConfig;
+}
+
+async function loadBotPresenceFromDatabase() {
+  if (!dbReady || !db) return;
+  const result = await q(`
+    SELECT setting_value
+    FROM bot_settings
+    WHERE setting_key = 'presence'
+  `);
+  const savedPresence = result?.rows?.[0]?.setting_value;
+  if (!savedPresence) return;
+  botPresenceConfig = normalizeBotPresence(
+    typeof savedPresence === 'string' ? JSON.parse(savedPresence) : savedPresence
+  );
+}
+
+musicController = new MusicController(client, process.env, applyMusicPresence);
+
+function canManageBotPresence(memberPermissions) {
+  return Boolean(
+    memberPermissions?.has(PermissionFlagsBits.Administrator) ||
+    memberPermissions?.has(PermissionFlagsBits.ManageGuild)
+  );
+}
+
+function hasGuildExpressionPermission(permissions) {
+  return Boolean(
+    permissions?.has(PermissionFlagsBits.Administrator) ||
+    permissions?.has(PermissionFlagsBits.CreateGuildExpressions) ||
+    permissions?.has(PermissionFlagsBits.ManageGuildExpressions)
+  );
+}
+
+async function importExpressionPack(guild, member, attachment, send) {
+  if (!guild) {
+    return send('❌ Este comando precisa ser usado em um servidor.');
+  }
+  if (!hasGuildExpressionPermission(member?.permissions)) {
+    return send('❌ Você precisa de **Criar Expressões** ou **Gerenciar Expressões** para importar o pack.');
+  }
+  if (!hasGuildExpressionPermission(guild.members.me?.permissions)) {
+    return send('❌ Preciso da permissão **Create Expressions** ou **Manage Expressions** para importar emojis e figurinhas.');
+  }
+  if (!attachment || !/\.zip$/i.test(attachment.name || '')) {
+    return send('Anexe um arquivo `.zip` contendo as pastas `emojis/` e/ou `stickers/`.');
+  }
+
+  try {
+    await send('⏳ Validando e importando o pack. Isso pode levar alguns minutos.');
+    const archive = await downloadPack(attachment.url);
+    const results = await uploadPack(guild, archive);
+    await send(summarizeUploadResults(results));
+  } catch (error) {
+    console.error('[PackUpload] Falha ao importar pack:', error);
+    await send(`❌ Não foi possível importar o pack: ${error.message}`);
+  }
+}
+
+async function updateBotPresenceFromCommand(values, send) {
+  const status = String(values.status || '').toLowerCase();
+  const activityType = String(values.activityType || '').toLowerCase();
+  if (!BOT_PRESENCE_STATUSES.has(status)) {
+    return send('❌ Status inválido. Escolha `online`, `idle`, `dnd` ou `invisible`.');
+  }
+  if (activityType !== 'none' && !Object.hasOwn(BOT_ACTIVITY_TYPES, activityType)) {
+    return send('❌ Atividade inválida. Escolha `playing`, `watching`, `listening`, `competing` ou `none`.');
+  }
+  const activityText = activityType === 'none'
+    ? ''
+    : String(values.activityText ?? botPresenceConfig.activityText).trim();
+  if (activityText.length > 128) {
+    return send('❌ O texto de atividade deve ter no máximo 128 caracteres.');
+  }
+
+  try {
+    const updated = await saveBotPresenceConfig({
+      status,
+      activityType: activityType === 'none' ? botPresenceConfig.activityType : activityType,
+      activityText
+    });
+    const activity = updated.activityText
+      ? `${updated.activityType}: ${updated.activityText}`
+      : 'sem atividade';
+    return send(`✅ Presença do bot atualizada: **${updated.status}**, **${activity}**.`);
+  } catch (error) {
+    console.error('[Presence] Falha ao salvar a configuração:', error);
+    return send(`⚠️ O status foi aplicado nesta sessão, mas não pude confirmar o salvamento: ${error.message}`);
+  }
+}
 
 
 
@@ -2886,6 +3077,12 @@ async function initDB() {
 
       );
 
+      CREATE TABLE IF NOT EXISTS bot_settings (
+        setting_key TEXT PRIMARY KEY,
+        setting_value JSONB NOT NULL,
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+
     `);
 
     await db.query(`
@@ -3867,6 +4064,10 @@ async function handleHelpPrefixCommand(message) {
       {
         name: 'Música',
         value: '`!play <busca/link>`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume <1-100>`, `!shuffle` (também disponíveis como comandos `/`).'
+      },
+      {
+        name: 'Perfil e packs',
+        value: '`!botstatus <status> <atividade> [texto]` altera a presença do bot; `!packimport` com um ZIP anexado importa emojis e figurinhas. Status exige Gerenciar Servidor; packs exigem Criar/Gerenciar Expressões.'
       },
       {
         name: 'Moderação',
@@ -10947,6 +11148,52 @@ async function registerCommands() {
       ),
 
     new SlashCommandBuilder()
+      .setName('botstatus')
+      .setDescription('Altera a presença e a atividade do perfil do bot.')
+      .addStringOption(option =>
+        option
+          .setName('status')
+          .setDescription('Status do perfil do bot.')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Online', value: 'online' },
+            { name: 'Ausente', value: 'idle' },
+            { name: 'Não perturbe', value: 'dnd' },
+            { name: 'Invisível', value: 'invisible' }
+          )
+      )
+      .addStringOption(option =>
+        option
+          .setName('atividade')
+          .setDescription('Tipo de atividade mostrado no perfil.')
+          .setRequired(true)
+          .addChoices(
+            { name: 'Jogando', value: 'playing' },
+            { name: 'Assistindo', value: 'watching' },
+            { name: 'Ouvindo', value: 'listening' },
+            { name: 'Competindo', value: 'competing' },
+            { name: 'Sem atividade', value: 'none' }
+          )
+      )
+      .addStringOption(option =>
+        option
+          .setName('texto')
+          .setDescription('Texto da atividade (máximo 128 caracteres).')
+          .setMaxLength(128)
+          .setRequired(false)
+      ),
+
+    new SlashCommandBuilder()
+      .setName('packimport')
+      .setDescription('Importa um pack ZIP de emojis e figurinhas.')
+      .addAttachmentOption(option =>
+        option
+          .setName('arquivo')
+          .setDescription('ZIP com as pastas emojis/ e/ou stickers/.')
+          .setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
 
       .setName('ping')
 
@@ -11776,6 +12023,34 @@ async function handleSlashCommand(
   const command =
 
     interaction.commandName;
+
+  if (command === 'botstatus') {
+    if (!canManageBotPresence(interaction.memberPermissions)) {
+      return interaction.reply({
+        content: '❌ Você precisa de **Gerenciar Servidor** para alterar o status do perfil do bot.',
+        ephemeral: true
+      });
+    }
+    await interaction.deferReply({ ephemeral: true });
+    return updateBotPresenceFromCommand({
+      status: interaction.options.getString('status'),
+      activityType: interaction.options.getString('atividade'),
+      activityText: interaction.options.getString('texto')
+    }, content => interaction.editReply({ content }));
+  }
+
+  if (command === 'packimport') {
+    await interaction.deferReply({ ephemeral: true });
+    const member = interaction.guild
+      ? await interaction.guild.members.fetch(interaction.user.id).catch(() => null)
+      : null;
+    return importExpressionPack(
+      interaction.guild,
+      member,
+      interaction.options.getAttachment('arquivo'),
+      content => interaction.editReply({ content })
+    );
+  }
 
   if (['play', 'pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'shuffle'].includes(command)) {
     return musicController.handleInteraction(interaction);
@@ -13201,6 +13476,8 @@ client.once(
 
 
     await initDB();
+    await loadBotPresenceFromDatabase();
+    applyBotPresence();
     await syncLocalVoiceHoursToDatabase();
     await ensureRankCallDatabaseTables();
     await loadRankCallStreaksFromDatabase();
@@ -14371,6 +14648,32 @@ client.on(
       }
 
       const prefixCommand = message.content?.trim().match(/^!(\S+)/)?.[1]?.toLowerCase();
+      if (prefixCommand === 'botstatus') {
+        if (!canManageBotPresence(message.member?.permissions)) {
+          await message.reply('❌ Você precisa de **Gerenciar Servidor** para alterar o status do perfil do bot.');
+          return;
+        }
+        const [, status, activityType, ...activityParts] = message.content.trim().split(/\s+/);
+        if (!status || !activityType) {
+          await message.reply('Use `!botstatus <online|idle|dnd|invisible> <playing|watching|listening|competing|none> [texto]`.');
+          return;
+        }
+        await updateBotPresenceFromCommand({
+          status,
+          activityType,
+          activityText: activityParts.length ? activityParts.join(' ') : undefined
+        }, content => message.channel.send(content));
+        return;
+      }
+      if (prefixCommand === 'packimport') {
+        await importExpressionPack(
+          message.guild,
+          message.member,
+          message.attachments.first(),
+          content => message.channel.send(content)
+        );
+        return;
+      }
       if (['play', 'pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'shuffle'].includes(prefixCommand)) {
         await musicController.handlePrefix(message, prefixCommand);
         return;

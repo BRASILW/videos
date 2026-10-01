@@ -19,4 +19,5 @@ Thumbs.db
 src/afk-users.json
 src/temp-voice-rooms.json
 src/voice-live-sessions.json
+src/bot-presence.json
 rankcall-backups/

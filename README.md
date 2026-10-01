@@ -23,11 +23,15 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 ## Funcoes
 
-Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
+Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close`, `/role`, `/botstatus` e `/packimport`.
 
 Comandos slash de musica: `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/volume` e `/shuffle`. Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban`, `!play`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume`, `!shuffle` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
 
 Os comandos de musica precisam de um servidor Lavalink v4.2+ separado do processo do bot. Configure `LAVALINK_HOST`, `LAVALINK_PORT`, `LAVALINK_PASSWORD` e `LAVALINK_SECURE` nas variaveis do Render e mantenha a senha igual a do servidor Lavalink. `LAVALINK_SEARCH_PREFIX` define o provedor de busca (padrao `ytsearch:`); links diretos funcionam quando o servidor tem o source/plugin correspondente configurado. Servidores Lavalink recentes podem precisar de plugin de fonte do YouTube para buscas e reproducao do YouTube. A fila aceita ate 100 faixas, limita uma playlist a 50 faixas e comeca com volume 70%. Sem um Lavalink conectado, os comandos explicam a configuracao pendente.
+
+Administradores e gerentes do servidor podem alterar o perfil do bot com `/botstatus` ou `!botstatus <online|idle|dnd|invisible> <playing|watching|listening|competing|none> [texto]`. A atividade atual da musica substitui temporariamente o texto fixo do perfil e volta ao status configurado quando a fila termina. Configure `BOT_STATUS`, `BOT_ACTIVITY_TYPE` e `BOT_ACTIVITY_TEXT` para definir o padrao no Render. Mudancas feitas por comando sao salvas no PostgreSQL quando `DATABASE_URL` esta configurada; sem banco, sao salvas no arquivo local, que pode nao persistir entre reinicios ou deploys do Render.
+
+Para importar um pack, anexe um ZIP a `!packimport` ou use `/packimport`. Coloque imagens em pastas de primeiro nivel `emojis/` e `stickers/`; nomes dos arquivos viram nomes das expressoes. O importador aceita ate 10 MiB por ZIP, 100 imagens e 512 KiB por imagem, processa um arquivo por vez e nunca apaga expressoes existentes. Emojis aceitam PNG/JPG/GIF; figurinhas aceitam PNG/APNG com 320x320 pixels. A criacao depende dos limites de expressoes do servidor e da permissao **Create Expressions** ou **Manage Expressions** para o bot e para quem executa o comando. Em mensagens prefixadas, anexe o ZIP na mesma mensagem de `!packimport`.
 
 `!mute <usuario> <duracao> [motivo] [link de prova]` usa o timeout nativo do Discord, bloqueando mensagens e voz pelo tempo indicado. Duracoes aceitas incluem `30m`, `4h`, `2d` e `1w`, ate o limite de 28 dias. Tambem e possivel anexar a prova na mensagem do comando. `!ban <usuario> [motivo] [link de prova]` aceita prova opcional da mesma forma. Slash `/mute` e `/ban` tambem oferecem campos de link e anexo.
 

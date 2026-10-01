@@ -44,8 +44,9 @@ function nodeAddress(host, port) {
 }
 
 class MusicController {
-  constructor(client, env = process.env) {
+  constructor(client, env = process.env, onTrackChange = () => {}) {
     this.client = client;
+    this.onTrackChange = onTrackChange;
     this.queues = new Map();
     this.manager = null;
 
@@ -122,6 +123,7 @@ class MusicController {
     const next = state.queue.shift();
     if (!next) {
       state.textChannelId = null;
+      this.onTrackChange(null);
       return false;
     }
 
@@ -129,6 +131,7 @@ class MusicController {
     try {
       await state.player.setGlobalVolume(state.volume);
       await state.player.playTrack({ track: { encoded: next.track.encoded } });
+      this.onTrackChange(next.track.info.title);
       if (notifyPlayback) {
         await this.notify(state, `▶️ Tocando **${next.track.info.title}** — pedido por <@${next.requesterId}>.`);
       }
@@ -266,6 +269,7 @@ class MusicController {
         if (!state.current) {
           await this.manager.leaveVoiceChannel(guild.id);
           this.queues.delete(guild.id);
+          this.onTrackChange(null);
           return send('⏹️ Reprodução encerrada e fila limpa.');
         }
         state.stopping = true;
