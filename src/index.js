@@ -1149,8 +1149,19 @@ const spamHistory = new Map();
 const processedAiMessages =
 
   new Set();
-
 const cachedGuildInvites = new Map();
+const processedDiscordEvents = new Set();
+const dailyGuildStatsLocal = new Map();
+const statsDashboardPanels = new Map();
+let statsDashboardTimer = null;
+const statsDashboardRefreshInProgress = new Set();
+const statsDashboardOwner = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+let lastDailyDashboardMaintenanceDate = '';
+
+const STATS_DASHBOARD_BANNER =
+  'https://cdn.discordapp.com/attachments/1551958147252490320/1555244531333726289/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abfd1d7&is=6abe8057&hm=43982236a968e1357f8bf523d99985814edf76c7cc1e4436a1f37b0c54235e1f&';
+const RANK_CALL_STREAK_BANNER =
+  'https://cdn.discordapp.com/attachments/1551958147252490320/1555245339102019634/8d73932d6656cb10c97d89063545bf99.png?backend=b2&ex=6abfd297&is=6abe8117&hm=618e0e96350ca98405c18d1c666fc8c9edcf2612d27c0a0102798edc46441750&';
 
 
 
@@ -3083,6 +3094,29 @@ async function initDB() {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
 
+      CREATE TABLE IF NOT EXISTS guild_daily_stats (
+        guild_id TEXT NOT NULL,
+        date_key TEXT NOT NULL,
+        message_count BIGINT NOT NULL DEFAULT 0,
+        command_count BIGINT NOT NULL DEFAULT 0,
+        joins BIGINT NOT NULL DEFAULT 0,
+        leaves BIGINT NOT NULL DEFAULT 0,
+        PRIMARY KEY (guild_id, date_key)
+      );
+
+      CREATE TABLE IF NOT EXISTS discord_event_dedupe (
+        event_key TEXT PRIMARY KEY,
+        processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE TABLE IF NOT EXISTS stats_dashboard_panels (
+        guild_id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        lease_owner TEXT,
+        lease_expires_at TIMESTAMPTZ,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
     `);
 
     await db.query(`
@@ -3091,10 +3125,15 @@ async function initDB() {
         ADD COLUMN IF NOT EXISTS voice_seconds BIGINT DEFAULT 0
     `);
 
+    await db.query(`
+      ALTER TABLE stats_dashboard_panels
+        ADD COLUMN IF NOT EXISTS lease_owner TEXT,
+        ADD COLUMN IF NOT EXISTS lease_expires_at TIMESTAMPTZ
+    `);
 
     dbReady = true;
 
-
+    await runDailyDashboardMaintenance();
 
     console.log(
 
@@ -4055,7 +4094,7 @@ async function handleHelpPrefixCommand(message) {
     .addFields(
       {
         name: 'Geral',
-        value: '`!help`, `!ping`, `!oi`, `!regras2`, `!priv`'
+        value: '`!help`, `!ping`, `!oi`, `!stats`, `!regras2`, `!priv`'
       },
       {
         name: 'Voz e RankCall',
@@ -5181,8 +5220,7 @@ function buildRankCallStreakEmbed(guild, page = 0) {
     footer: `30 minutos acumulados em call por dia • Dias históricos salvos • Página ${safePage + 1}/${totalPages}  ${guild.name}`
   });
 
-  // A sequência de fogo tem somente o banner próprio; não usa ícone/thumbnail.
-  const RANK_CALL_STREAK_BANNER = 'https://cdn.discordapp.com/attachments/1553979838698885200/1554936187612045404/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abeb2ac&is=6abd612c&hm=5e208e52231ae03a6e070f2f3994e1b3c6d60b36fb6651e9acc8c5b226509211&';
+  // O painel de sequência usa o banner estático enviado para essa finalidade.
   embed.setImage(RANK_CALL_STREAK_BANNER);
 
   return { embed, totalPages, safePage, userIds: rows.map(row => row.userId) };
@@ -6073,320 +6111,399 @@ async function getServerStats(
 
 }
 
+async function runDailyDashboardMaintenance() {
+  const dateKey = getRankCallDateKey();
+  if (dateKey === lastDailyDashboardMaintenanceDate) return;
 
+  for (const key of dailyGuildStatsLocal.keys()) {
+    if (!key.endsWith(`:${dateKey}`)) dailyGuildStatsLocal.delete(key);
+  }
+  if (dbReady) {
+    const statsResult = await q(`
+      DELETE FROM guild_daily_stats
+      WHERE date_key <> $1
+    `, [dateKey]);
+    const dedupeResult = await q(`
+      DELETE FROM discord_event_dedupe
+      WHERE processed_at < NOW() - INTERVAL '7 days'
+    `);
+    if (!statsResult || !dedupeResult) {
+      console.error('[Dashboard] Não foi possível concluir a limpeza diária das estatísticas/eventos.');
+      return;
+    }
+  }
+  lastDailyDashboardMaintenanceDate = dateKey;
+}
+
+function getDailyGuildStatsKey(guildId, dateKey = getRankCallDateKey()) {
+  return `${guildId}:${dateKey}`;
+}
+
+function getOrCreateDailyGuildStats(guildId, dateKey = getRankCallDateKey()) {
+  const key = getDailyGuildStatsKey(guildId, dateKey);
+  if (!dailyGuildStatsLocal.has(key)) {
+    dailyGuildStatsLocal.set(key, {
+      messages: 0,
+      commands: 0,
+      joins: 0,
+      leaves: 0
+    });
+  }
+  return dailyGuildStatsLocal.get(key);
+}
+
+async function recordDailyGuildStats(guildId, changes) {
+  const dateKey = getRankCallDateKey();
+  const counts = {
+    messages: Math.max(0, Math.floor(Number(changes.messages) || 0)),
+    commands: Math.max(0, Math.floor(Number(changes.commands) || 0)),
+    joins: Math.max(0, Math.floor(Number(changes.joins) || 0)),
+    leaves: Math.max(0, Math.floor(Number(changes.leaves) || 0))
+  };
+  const local = getOrCreateDailyGuildStats(guildId, dateKey);
+  for (const [key, value] of Object.entries(counts)) local[key] += value;
+  if (!dbReady || !Object.values(counts).some(Boolean)) return;
+
+  const result = await q(`
+    INSERT INTO guild_daily_stats (
+      guild_id, date_key, message_count, command_count, joins, leaves
+    )
+    VALUES ($1, $2, $3, $4, $5, $6)
+    ON CONFLICT (guild_id, date_key)
+    DO UPDATE SET
+      message_count = guild_daily_stats.message_count + EXCLUDED.message_count,
+      command_count = guild_daily_stats.command_count + EXCLUDED.command_count,
+      joins = guild_daily_stats.joins + EXCLUDED.joins,
+      leaves = guild_daily_stats.leaves + EXCLUDED.leaves
+  `, [
+    guildId,
+    dateKey,
+    counts.messages,
+    counts.commands,
+    counts.joins,
+    counts.leaves
+  ]);
+  if (!result) {
+    console.error(`[Dashboard] Não foi possível salvar as estatísticas diárias do servidor ${guildId}.`);
+  }
+}
+
+async function claimDiscordEvent(eventType, eventId) {
+  const eventKey = `${eventType}:${eventId}`;
+  if (processedDiscordEvents.has(eventKey)) return false;
+
+  processedDiscordEvents.add(eventKey);
+  if (processedDiscordEvents.size > 10000) {
+    const oldest = processedDiscordEvents.values().next().value;
+    if (oldest) processedDiscordEvents.delete(oldest);
+  }
+
+  if (!dbReady) return true;
+  const result = await q(`
+    INSERT INTO discord_event_dedupe (event_key)
+    VALUES ($1)
+    ON CONFLICT (event_key) DO NOTHING
+    RETURNING event_key
+  `, [eventKey]);
+  if (!result) {
+    console.warn(`[Events] Deduplicação compartilhada indisponível para ${eventType}; protegendo somente neste processo.`);
+    return true;
+  }
+  return result.rows.length > 0;
+}
+
+async function getDailyGuildStats(guildId) {
+  const dateKey = getRankCallDateKey();
+  const local = getOrCreateDailyGuildStats(guildId, dateKey);
+  let daily = local;
+
+  if (dbReady) {
+    const result = await q(`
+      SELECT message_count, command_count, joins, leaves
+      FROM guild_daily_stats
+      WHERE guild_id = $1 AND date_key = $2
+    `, [guildId, dateKey]);
+    if (result) {
+      const row = result.rows[0];
+      daily = row
+        ? {
+            messages: Number(row.message_count) || 0,
+            commands: Number(row.command_count) || 0,
+            joins: Number(row.joins) || 0,
+            leaves: Number(row.leaves) || 0
+          }
+        : { messages: 0, commands: 0, joins: 0, leaves: 0 };
+    }
+  }
+
+  const voiceSeconds = [...rankCallStreaks.entries()]
+    .filter(([key]) => key.startsWith(`${guildId}:`))
+    .reduce((total, [, streak]) => total + (Number(streak.dailySeconds?.[dateKey]) || 0), 0);
+
+  return {
+    ...daily,
+    voiceSeconds,
+    growth: daily.joins - daily.leaves,
+    dateKey
+  };
+}
 
 async function buildDashboardEmbed(
 
   guild
 
 ) {
+  const stats = await getDailyGuildStats(guild.id);
+  const voiceChannels = [...guild.channels.cache.values()]
+    .filter(channel =>
+      (channel.type === ChannelType.GuildVoice || channel.type === ChannelType.GuildStageVoice) &&
+      channel.members.size > 0
+    )
+    .map(channel => ({
+      channel,
+      members: [...channel.members.values()].filter(member => !member.user.bot)
+    }))
+    .filter(item => item.members.length > 0)
+    .sort((a, b) => b.members.length - a.members.length);
 
-  const stats =
-
-    await getServerStats(
-
-      guild
-
-    );
-
-
-
-  const top =
-
-    stats.topChannels.length
-
-      ? stats.topChannels
-
-          .map(
-
-            (item, index) => {
-
-              const channel =
-
-                guild.channels.cache.get(
-
-                  item.channel_id
-
-                );
-
-
-
-              return `${
-
-                index + 1
-
-              }. ${
-
-                channel
-
-                  ? `<#${channel.id}>`
-
-                  : `Canal ${item.channel_id}`
-
-              } " ${
-
-                item.message_count
-
-              } mensagens`;
-
-            }
-
-          )
-
-          .join('\n')
-
-      : 'Sem dados ainda.';
-
-
-
-  return createEmbed({
-
-    title:
-
-      '📊 Painel de Estatísticas',
-
-    description:
-
-      'Estatísticas atualizadas do servidor.',
-
+  let callFieldCharsRemaining = 3000;
+  const callFields = [];
+  for (const { channel, members } of voiceChannels) {
+    if (callFields.length >= 10 || callFieldCharsRemaining <= 0) break;
+    const mentions = [];
+    for (const member of members.slice(0, 40)) {
+      const mention = `<@${member.id}>`;
+      const separator = mentions.length ? 2 : 0;
+      if (mention.length + separator > callFieldCharsRemaining) break;
+      mentions.push(mention);
+      callFieldCharsRemaining -= mention.length + separator;
+    }
+    const remainder = members.length - mentions.length;
+    const value = `${mentions.join(', ') || 'Participantes'}${remainder > 0 ? ` e mais ${remainder}` : ''}`;
+    if (value.length > 1024) continue;
+    callFields.push({
+      name: `🎙️ ${channel.name} · ${members.length}`.slice(0, 256),
+      value,
+      inline: false
+    });
+  }
+  const fields = [
+    { name: '👥 Membros', value: String(guild.memberCount || 0), inline: true },
+    { name: '🎙️ Em call', value: String(voiceChannels.reduce((total, item) => total + item.members.length, 0)), inline: true },
+    { name: '⏱️ Horas hoje', value: `${(stats.voiceSeconds / 3600).toFixed(1)}h`, inline: true },
+    { name: '💬 Mensagens hoje', value: String(stats.messages), inline: true },
+    { name: '⚙️ Comandos hoje', value: String(stats.commands), inline: true },
+    { name: '📈 Crescimento hoje', value: `${stats.growth > 0 ? '+' : ''}${stats.growth} (${stats.joins} entradas / ${stats.leaves} saídas)`, inline: true },
+    ...(callFields.length
+      ? callFields
+      : [{ name: '📞 Calls ocupadas', value: 'Nenhuma call está ocupada agora.', inline: false }])
+  ];
+  const updatedAt = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: RANK_CALL_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  }).format(new Date());
+  const embed = createEmbed({
+    title: '📈 Estatísticas · LABUBU APP',
+    description: `Resumo diário de **${guild.name}**. Os contadores diários reiniciam à meia-noite (${RANK_CALL_TIMEZONE}).`,
     color: '#5865F2',
-
-
-
-    fields: [
-
-      {
-
-        name: '🤖 BOT',
-
-        value:
-
-          'YY ONLINE',
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: '👥 Membros',
-
-        value:
-
-          String(
-
-            stats.members
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: 'YY Online',
-
-        value:
-
-          String(
-
-            stats.online
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: '< Tickets',
-
-        value:
-
-          String(
-
-            stats.tickets
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: '= Matches',
-
-        value:
-
-          String(
-
-            stats.matches
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: '🔊 Em call',
-
-        value:
-
-          String(
-
-            stats.voice
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name: '💬 Mensagens',
-
-        value:
-
-          String(
-
-            stats.messages
-
-          ),
-
-        inline: true
-
-      },
-
-
-
-      {
-
-        name:
-
-          'Y"^ Canais mais utilizados',
-
-        value:
-
-          top
-
-      }
-
-    ],
-
-
-
-    footer:
-
-      'Atualização em tempo real'
-
+    fields,
+    footer: `Atualizado às ${updatedAt} · Atualização a cada 5 segundos`
   });
-
+  embed.setImage(STATS_DASHBOARD_BANNER);
+  return { embed };
 }
 
+async function saveStatsDashboardPanel(guildId, panel) {
+  statsDashboardPanels.set(guildId, panel);
+  if (!dbReady) return;
 
+  const result = await q(`
+    INSERT INTO stats_dashboard_panels (guild_id, channel_id, message_id)
+    VALUES ($1, $2, $3)
+    ON CONFLICT (guild_id)
+    DO UPDATE SET
+      channel_id = EXCLUDED.channel_id,
+      message_id = EXCLUDED.message_id,
+      lease_owner = NULL,
+      lease_expires_at = NULL,
+      updated_at = NOW()
+  `, [guildId, panel.channelId, panel.messageId]);
+  if (!result) {
+    console.error(`[Dashboard] Não foi possível persistir o painel do servidor ${guildId}.`);
+  }
+}
 
-async function createDashboard(
-
-  guild,
-
-  channel
-
-) {
-
-  if (
-
-    !channel ||
-
-    !channel.isTextBased()
-
-  ) {
-
+async function loadStatsDashboardPanel(guildId) {
+  if (!dbReady) return statsDashboardPanels.get(guildId) || null;
+  const result = await q(`
+    SELECT channel_id, message_id
+    FROM stats_dashboard_panels
+    WHERE guild_id = $1
+  `, [guildId]);
+  if (!result) {
+    throw new Error('Não consegui verificar se já existe um painel persistido.');
+  }
+  const row = result.rows[0];
+  if (!row) {
+    statsDashboardPanels.delete(guildId);
     return null;
+  }
+  const panel = { channelId: row.channel_id, messageId: row.message_id };
+  statsDashboardPanels.set(guildId, panel);
+  return panel;
+}
 
+async function claimStatsDashboardRefreshLease(guildId, panel) {
+  if (!dbReady) return true;
+  const result = await q(`
+    UPDATE stats_dashboard_panels
+    SET lease_owner = $2,
+        lease_expires_at = NOW() + INTERVAL '30 seconds'
+    WHERE guild_id = $1
+      AND (
+        lease_owner = $2
+        OR lease_expires_at IS NULL
+        OR lease_expires_at < NOW()
+      )
+      AND channel_id = $3
+      AND message_id = $4
+    RETURNING guild_id
+  `, [guildId, statsDashboardOwner, panel.channelId, panel.messageId]);
+  if (!result) {
+    console.error(`[Dashboard] Não foi possível obter o bloqueio de atualização do servidor ${guildId}.`);
+    return false;
+  }
+  if (result.rows.length > 0) return true;
+
+  const latest = await q(`
+    SELECT channel_id, message_id
+    FROM stats_dashboard_panels
+    WHERE guild_id = $1
+  `, [guildId]);
+  if (!latest) {
+    console.error(`[Dashboard] Não foi possível sincronizar a configuração do painel do servidor ${guildId}.`);
+    return false;
+  }
+  const row = latest.rows[0];
+  if (row && (row.channel_id !== panel.channelId || row.message_id !== panel.messageId)) {
+    statsDashboardPanels.set(guildId, {
+      channelId: row.channel_id,
+      messageId: row.message_id
+    });
+  }
+  return false;
+}
+
+async function publishStatsDashboard(guild, channel) {
+  if (!channel?.isTextBased() || channel.guildId !== guild.id) {
+    throw new Error('Use o comando em um canal de texto deste servidor.');
   }
 
-
-
-  const embed =
-
-    await buildDashboardEmbed(
-
-      guild
-
-    );
-
-
-
-  const message =
-
-    await channel.send({
-
-      embeds: [embed]
-
+  const existing = await loadStatsDashboardPanel(guild.id);
+  if (existing?.channelId === channel.id && existing.messageId) {
+    const existingMessage = await channel.messages.fetch(existing.messageId).catch(error => {
+      if (error.code === 10008) return null;
+      throw error;
     });
+    if (existingMessage) {
+      await refreshStatsDashboard(guild, existing);
+      return existingMessage;
+    }
+  } else if (existing?.messageId) {
+    const oldChannel = await guild.channels.fetch(existing.channelId).catch(() => null);
+    const oldMessage = oldChannel?.isTextBased()
+      ? await oldChannel.messages.fetch(existing.messageId).catch(() => null)
+      : null;
+    if (oldMessage) await oldMessage.delete().catch(error => {
+      console.warn('[Dashboard] Não foi possível remover o painel do canal anterior:', error.message);
+    });
+  }
 
-
-
+  const payload = await buildDashboardEmbed(guild);
+  const message = await channel.send({
+    embeds: [payload.embed],
+    allowedMentions: { parse: [] }
+  });
+  await saveStatsDashboardPanel(guild.id, {
+    channelId: channel.id,
+    messageId: message.id
+  });
   return message;
-
 }
 
-
-
-async function refreshDashboard(
-
-  guild,
-
-  message
-
-) {
-
+async function refreshStatsDashboard(guild, panel) {
+  if (statsDashboardRefreshInProgress.has(guild.id)) return;
+  statsDashboardRefreshInProgress.add(guild.id);
   try {
+    if (!await claimStatsDashboardRefreshLease(guild.id, panel)) return;
+    let channel = guild.channels.cache.get(panel.channelId);
+    if (!channel) channel = await guild.channels.fetch(panel.channelId).catch(() => null);
+    if (!channel?.isTextBased()) {
+      console.warn(`[Dashboard] Canal ${panel.channelId} indisponível no servidor ${guild.id}.`);
+      return;
+    }
 
-    const embed =
-
-      await buildDashboardEmbed(
-
-        guild
-
-      );
-
-
+    let message = null;
+    if (panel.messageId) {
+      message = await channel.messages.fetch(panel.messageId).catch(error => {
+        if (error.code === 10008) return null;
+        throw error;
+      });
+    }
+    const payload = await buildDashboardEmbed(guild);
+    if (!message) {
+      message = await channel.send({
+        embeds: [payload.embed],
+        allowedMentions: { parse: [] }
+      });
+      await saveStatsDashboardPanel(guild.id, {
+        channelId: channel.id,
+        messageId: message.id
+      });
+      return;
+    }
 
     await message.edit({
-
-      embeds: [embed]
-
+      embeds: [payload.embed],
+      allowedMentions: { parse: [] }
     });
+  } catch (error) {
+    console.error(`[Dashboard] Erro ao atualizar painel do servidor ${guild.id}:`, error.message);
+  } finally {
+    statsDashboardRefreshInProgress.delete(guild.id);
+  }
+}
 
-
-
-    return true;
-
-  } catch {
-
-    return false;
-
+async function restoreStatsDashboardPanels() {
+  if (!dbReady) return;
+  const result = await q(`
+    SELECT guild_id, channel_id, message_id
+    FROM stats_dashboard_panels
+  `);
+  if (!result) {
+    console.error('[Dashboard] Não foi possível carregar os painéis persistidos.');
+    return;
   }
 
+  for (const row of result.rows) {
+    const panel = { channelId: row.channel_id, messageId: row.message_id };
+    statsDashboardPanels.set(row.guild_id, panel);
+    const guild = client.guilds.cache.get(row.guild_id);
+    if (guild) void refreshStatsDashboard(guild, panel);
+  }
+}
+
+function startStatsDashboardRefresh() {
+  if (statsDashboardTimer) return;
+  statsDashboardTimer = setInterval(() => {
+    void runDailyDashboardMaintenance();
+    for (const [guildId, panel] of statsDashboardPanels) {
+      const guild = client.guilds.cache.get(guildId);
+      if (guild) void refreshStatsDashboard(guild, panel);
+    }
+  }, 5000);
 }
 
 
@@ -12104,23 +12221,19 @@ async function handleSlashCommand(
 
     }
 
-
-
-    const embed =
-
-      await buildDashboardEmbed(
-
-        interaction.guild
-
-      );
-
-
-
-    return interaction.reply({
-
-      embeds: [embed]
-
-    });
+    try {
+      await publishStatsDashboard(interaction.guild, interaction.channel);
+      return interaction.reply({
+        content: '✅ Painel publicado/atualizado neste canal; ele se atualiza a cada 5 segundos.',
+        flags: MessageFlags.Ephemeral
+      });
+    } catch (error) {
+      console.error('[Dashboard] Não foi possível publicar o painel pelo comando slash:', error.message);
+      return interaction.reply({
+        content: `⚠️ Não consegui publicar o painel: ${error.message}`,
+        flags: MessageFlags.Ephemeral
+      });
+    }
 
   }
 
@@ -13476,6 +13589,8 @@ client.once(
 
 
     await initDB();
+    await restoreStatsDashboardPanels();
+    startStatsDashboardRefresh();
     await loadBotPresenceFromDatabase();
     applyBotPresence();
     await syncLocalVoiceHoursToDatabase();
@@ -13665,6 +13780,8 @@ client.on(Events.InviteDelete, invite => {
 });
 
 client.on(Events.GuildMemberAdd, async member => {
+  if (!await claimDiscordEvent('member-join', `${member.guild.id}:${member.id}:${member.joinedTimestamp || 'unknown'}`)) return;
+  await recordDailyGuildStats(member.guild.id, { joins: 1 });
   const inviter = await findInviterForJoin(member.guild);
   const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
   if (!channel?.isTextBased()) {
@@ -13682,6 +13799,12 @@ client.on(Events.GuildMemberAdd, async member => {
   }
 });
 
+client.on(Events.GuildMemberRemove, async member => {
+  const joinedAt = member.joinedTimestamp || 'unknown';
+  if (!await claimDiscordEvent('member-leave', `${member.guild.id}:${member.id}:${joinedAt}`)) return;
+  await recordDailyGuildStats(member.guild.id, { leaves: 1 });
+});
+
 
 
 client.on(
@@ -13691,12 +13814,16 @@ client.on(
   async interaction => {
 
     try {
+      if (!await claimDiscordEvent('interaction', interaction.id)) return;
 
       if (
 
         interaction.isChatInputCommand()
 
       ) {
+        if (interaction.guild) {
+          await recordDailyGuildStats(interaction.guild.id, { commands: 1 });
+        }
 
         await handleSlashCommand(
 
@@ -14615,8 +14742,9 @@ client.on(
   async message => {
 
     try {
-
       if (!message.guild) {
+        if (message.author?.bot) return;
+        if (!await claimDiscordEvent('message', message.id)) return;
         await forwardIncomingDmToLog(message);
         return;
       }
@@ -14624,7 +14752,13 @@ client.on(
       if (message.author.bot) {
         return;
       }
+      if (!await claimDiscordEvent('message', message.id)) return;
 
+      const dailyCommand = message.content?.trim().match(/^!(\S+)/);
+      await recordDailyGuildStats(message.guild.id, {
+        messages: 1,
+        commands: dailyCommand ? 1 : 0
+      });
 
       if (await handleAfkPrefixCommand(message)) {
         return;
@@ -14648,6 +14782,20 @@ client.on(
       }
 
       const prefixCommand = message.content?.trim().match(/^!(\S+)/)?.[1]?.toLowerCase();
+      if (prefixCommand === 'stats' || prefixCommand === 'dashboard') {
+        if (!canManageBotPresence(message.member?.permissions)) {
+          await message.reply('❌ Você precisa de **Gerenciar Servidor** para publicar ou mover o painel.');
+          return;
+        }
+        try {
+          await publishStatsDashboard(message.guild, message.channel);
+          await message.reply('✅ Painel de estatísticas criado/atualizado aqui; ele se atualiza a cada 5 segundos.');
+        } catch (error) {
+          console.error('[Dashboard] Não foi possível publicar o painel:', error.message);
+          await message.reply(`⚠️ Não consegui publicar o painel: ${error.message}`);
+        }
+        return;
+      }
       if (prefixCommand === 'botstatus') {
         if (!canManageBotPresence(message.member?.permissions)) {
           await message.reply('❌ Você precisa de **Gerenciar Servidor** para alterar o status do perfil do bot.');
