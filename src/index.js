@@ -3296,7 +3296,7 @@ async function syncLocalVoiceHoursToDatabase() {
           INSERT INTO bot_users (guild_id, user_id, voice_seconds)
           VALUES ($1,$2,0)
           ON CONFLICT (guild_id,user_id)
-          DO UPDATE SET voice_seconds = 0, last_seen = NOW()
+          DO NOTHING
         `, [guildId, userId]);
       } else {
         await q(`
@@ -4824,21 +4824,19 @@ async function getLiveVoiceRanking(
 
       );
 
-
+    if (!result) {
+      throw new Error('Não foi possível consultar as horas salvas no PostgreSQL.');
+    }
 
     for (
 
       const row of
 
-        result?.rows || []
+        result.rows
 
     ) {
 
       const dbVoiceSeconds = Number(row.voice_seconds || 0);
-
-      console.log(
-        `[RankCall] DB DEBUG | user=${row.user_id} | voice_seconds=${dbVoiceSeconds} | formatado=${formatVoiceDuration(dbVoiceSeconds)}`
-      );
 
       ranking.set(
         row.user_id,
@@ -4896,15 +4894,6 @@ async function getLiveVoiceRanking(
     }
 
   }
-
-  for (const [key, seconds] of voiceHoursLocal) {
-    const [guildId, userId] = key.split(':');
-    if (guildId === guild.id && Number(seconds) > 0) {
-      ranking.set(userId, Number(seconds) || 0);
-    }
-  }
-
-
 
   const now =
 
@@ -5788,7 +5777,9 @@ async function handleRankCallPrefixCommand(message) {
         throw new Error('A quantidade de horas ultrapassa o limite suportado.');
       }
       voiceHoursLocal.set(key, newSeconds);
-      saveVoiceHoursLocal();
+      if (!saveVoiceHoursLocal()) {
+        console.warn(`[RankCall] Atualização de ${key} está salva no PostgreSQL, mas não foi possível atualizar o cache local.`);
+      }
     } else {
       const current = Number(voiceHoursLocal.get(key) || 0);
       if (command === 'rankreset') {
@@ -5828,7 +5819,10 @@ async function handleRankCallPrefixCommand(message) {
     saveVoiceSessionsLocal();
     saveRankCallStreaks();
     await refreshRankCallPanel();
-    await message.channel.send(`✅ Horas de <@${target.id}> atualizadas no RankCall. As sequências de dias permanecem salvas.`).catch(() => {});
+    const persistence = dbReady
+      ? `salvas no PostgreSQL: **${formatVoiceDuration(newSeconds)}**`
+      : `atualizadas somente no arquivo local: **${formatVoiceDuration(newSeconds)}**. Sem PostgreSQL, o Render pode perder esse arquivo em reinicializações/deploys`;
+    await message.channel.send(`✅ Horas de <@${target.id}> ${persistence}. As sequências de dias permanecem salvas.`).catch(() => {});
     return true;
   } catch (error) {
     console.error('[RankCall]', error);
