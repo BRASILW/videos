@@ -31,9 +31,13 @@ Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!dm`, `!horascall`,
 
 Configure `MUTE_LOG_CHANNEL_ID` e `BAN_LOG_CHANNEL_ID` para canais de registro diferentes. Sem esses IDs, o bot tenta encontrar `#mute` e `#ban`, e depois usa `LOG_CHANNEL_ID`. Os comandos `!dm` apagam a mensagem do canal antes de enviar o PV, e enviam a confirmacao/erros por mensagem direta ao moderador. Para isso, o bot precisa de permissao para gerenciar mensagens no canal, e o moderador precisa aceitar mensagens diretas do bot.
 
-No canal `1551729250615304304`, o bot responde automaticamente as mensagens usando `OPENAI_API_KEY`. Configure essa chave no ambiente do Render; ela nunca deve ser enviada ao GitHub.
+No canal `1551729250615304304`, o bot responde automaticamente quando alguem menciona o bot ou responde a uma mensagem dele. A integracao padrao agora suporta Gemini `gemini-2.5-flash` pela cota gratuita do Google AI Studio. Crie uma chave em https://aistudio.google.com/apikey e configure `GEMINI_API_KEY` nas variaveis de ambiente do Render. A chave nunca deve ser enviada ao GitHub. A cota gratuita tem limites, pode mudar, e os dados podem ser usados pelo Google para melhorar produtos conforme os termos do nivel gratuito; nao envie dados sensiveis.
 
-O comando `/ask` usa IA somente quando `OPENAI_API_KEY` estiver configurada. `LOG_CHANNEL_ID` ativa logs de mensagens apagadas e moderacao. O anti-spam aplica timeout de 30 segundos apos seis mensagens em dez segundos.
+`AI_PROVIDER=gemini` seleciona Gemini; `GEMINI_MODEL` pode mudar o modelo. Para manter OpenAI, configure `AI_PROVIDER=openai`, `OPENAI_API_KEY` e opcionalmente `OPENAI_MODEL`. Sem `AI_PROVIDER`, o bot escolhe Gemini quando encontra uma `GEMINI_API_KEY`; caso contrario tenta OpenAI.
+
+A IA aceita conversa informal e palavroes comuns sem repreender os usuarios por isso. Nao e possivel prometer respostas totalmente sem filtros: o provedor pode bloquear certos conteudos, e o bot evita ataques discriminatorios, ameacas e incentivo a violencia.
+
+O comando `/ask` usa o provedor de IA configurado. `LOG_CHANNEL_ID` ativa logs de mensagens apagadas e moderacao. O anti-spam aplica timeout de 30 segundos apos seis mensagens em dez segundos.
 
 No Discord Developer Portal, ative **Message Content Intent**, **Server Members Intent** e conceda ao bot permissoes de gerenciamento, voz e canais conforme os comandos usados.
 

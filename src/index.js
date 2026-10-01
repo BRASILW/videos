@@ -2252,24 +2252,24 @@ function normalizeHexColor(value) {
 
 
 
-function hasOpenAIKey() {
+function getAIProvider() {
+  const configured = String(process.env.AI_PROVIDER || '').trim().toLowerCase();
+  if (configured) return configured;
+  if (process.env.GEMINI_API_KEY?.trim()) return 'gemini';
+  return 'openai';
+}
 
-  const k =
-
-    process.env.OPENAI_API_KEY?.trim();
-
-
-
-  return !!(
-
-    k &&
-
-    k.startsWith('sk-') &&
-
-    !k.includes('opcional')
-
-  );
-
+function hasAIProvider() {
+  const provider = getAIProvider();
+  if (provider === 'gemini') {
+    const key = process.env.GEMINI_API_KEY?.trim();
+    return Boolean(key && !/^(?:opcional|cole_)/i.test(key));
+  }
+  if (provider === 'openai') {
+    const key = process.env.OPENAI_API_KEY?.trim();
+    return Boolean(key && key.startsWith('sk-') && !key.includes('opcional'));
+  }
+  return false;
 }
 
 
@@ -3824,6 +3824,43 @@ async function handleHelpPrefixCommand(message) {
 
 
 
+async function askGemini(prompt, systemPrompt) {
+  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': process.env.GEMINI_API_KEY.trim()
+      },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 700 }
+      }),
+      signal: AbortSignal.timeout(30000)
+    }
+  );
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data.error?.message || `HTTP ${response.status}`;
+    throw new Error(`Falha na API Gemini: ${message}`);
+  }
+
+  const candidate = data.candidates?.[0];
+  const text = candidate?.content?.parts
+    ?.map(part => part.text || '')
+    .join('')
+    .trim();
+  if (text) return text;
+  if (data.promptFeedback?.blockReason || candidate?.finishReason === 'SAFETY') {
+    throw new Error('A API bloqueou esta resposta por segurança. Palavrões comuns são aceitos, mas alguns conteúdos ainda podem ser bloqueados pelo provedor.');
+  }
+  throw new Error('A API Gemini não retornou texto na resposta.');
+}
+
 async function askAI(
 
   prompt,
@@ -3832,14 +3869,27 @@ async function askAI(
 
 ) {
 
-  if (!hasOpenAIKey()) {
+  const provider = getAIProvider();
+  if (!hasAIProvider()) {
+    throw new Error(provider === 'gemini'
+      ? 'GEMINI_API_KEY não configurada. Crie uma chave gratuita no Google AI Studio e configure-a nas variáveis de ambiente.'
+      : provider === 'openai'
+        ? 'OPENAI_API_KEY não configurada.'
+        : `Provedor de IA inválido: ${provider}. Use AI_PROVIDER=gemini ou AI_PROVIDER=openai.`);
+  }
 
-    throw new Error(
+  const systemPrompt = [
+    'Responda em português brasileiro, de forma natural, direta e adequada a uma conversa casual de Discord.',
+    'Pode usar gírias e palavrões comuns quando combinarem com o contexto; não repreenda nem recuse apenas porque alguém usou palavrão.',
+    'Mantenha brincadeiras sem transformar a resposta em assédio direcionado, ataques discriminatórios, ameaças ou incentivo a violência real.',
+    systemExtra
+  ].filter(Boolean).join('\n\n');
 
-      'OPENAI_API_KEY não configurada.'
-
-    );
-
+  if (provider === 'gemini') {
+    return askGemini(prompt, systemPrompt);
+  }
+  if (provider !== 'openai') {
+    throw new Error(`Provedor de IA inválido: ${provider}. Use AI_PROVIDER=gemini ou AI_PROVIDER=openai.`);
   }
 
 
@@ -3888,9 +3938,7 @@ async function askAI(
 
               role: 'system',
 
-              content:
-
-                `Responda em portugus brasileiro, de forma clara, objetiva e educada. ${systemExtra}`
+              content: systemPrompt
 
             },
 
@@ -6733,7 +6781,7 @@ async function detectAttention(
 
 
 
-  if (!hasOpenAIKey()) {
+  if (!hasAIProvider()) {
 
     return;
 
@@ -13032,9 +13080,9 @@ client.once(
 
       `IA configurada: ${
 
-        hasOpenAIKey()
+        hasAIProvider()
 
-          ? 'sim'
+          ? getAIProvider()
 
           : 'não'
 
@@ -15049,7 +15097,7 @@ client.on(
 
           repliedToBot) &&
 
-        hasOpenAIKey()
+        hasAIProvider()
 
       ) {
 
