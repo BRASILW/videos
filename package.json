@@ -5,7 +5,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "node --watch src/index.js"
+    "dev": "node --watch src/index.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -14,6 +15,7 @@
     "@discordjs/voice": "^0.19.2",
     "discord.js": "^14.16.3",
     "dotenv": "^16.4.7",
-    "pg": "^8.23.0"
+    "pg": "^8.23.0",
+    "shoukaku": "^4.3.0"
   }
 }

@@ -78,6 +78,8 @@ const {
 
 } = require('@discordjs/voice');
 
+const { MusicController } = require('./music');
+
 
 
 let Pool = null;
@@ -944,6 +946,8 @@ const client = new Client({
   partials: [Partials.Channel]
 
 });
+
+const musicController = new MusicController(client);
 
 
 
@@ -3859,6 +3863,10 @@ async function handleHelpPrefixCommand(message) {
       {
         name: 'Voz e RankCall',
         value: '`!horascall [menção/ID]`, `!call [menção/ID]`, `!entrar`, `!sair`, `!rankcall`, `!rankrecreate`, `!rankconfig`, `!rankadd <menção/ID> <horas>`, `!rankremove <menção/ID> <horas>`, `!rankset <menção/ID> <horas>`, `!rankreset <menção/ID>`, `!rankresetall`'
+      },
+      {
+        name: 'Música',
+        value: '`!play <busca/link>`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume <1-100>`, `!shuffle` (também disponíveis como comandos `/`).'
       },
       {
         name: 'Moderação',
@@ -10904,6 +10912,41 @@ async function registerCommands() {
   const commands = [
 
     new SlashCommandBuilder()
+      .setName('play')
+      .setDescription('Toca uma música ou adiciona uma busca à fila.')
+      .addStringOption(option =>
+        option
+          .setName('busca')
+          .setDescription('Nome ou link da música.')
+          .setRequired(true)
+      ),
+
+    ...['pause', 'resume', 'skip', 'stop', 'queue', 'shuffle'].map(name =>
+      new SlashCommandBuilder()
+        .setName(name)
+        .setDescription({
+          pause: 'Pausa a música atual.',
+          resume: 'Retoma a música pausada.',
+          skip: 'Pula para a próxima música.',
+          stop: 'Encerra a reprodução e limpa a fila.',
+          queue: 'Mostra a fila de músicas.',
+          shuffle: 'Embaralha as músicas da fila.'
+        }[name])
+    ),
+
+    new SlashCommandBuilder()
+      .setName('volume')
+      .setDescription('Define o volume da música entre 1 e 100%.')
+      .addIntegerOption(option =>
+        option
+          .setName('nivel')
+          .setDescription('Volume desejado entre 1 e 100.')
+          .setMinValue(1)
+          .setMaxValue(100)
+          .setRequired(true)
+      ),
+
+    new SlashCommandBuilder()
 
       .setName('ping')
 
@@ -11733,6 +11776,10 @@ async function handleSlashCommand(
   const command =
 
     interaction.commandName;
+
+  if (['play', 'pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'shuffle'].includes(command)) {
+    return musicController.handleInteraction(interaction);
+  }
 
 
 
@@ -14324,6 +14371,10 @@ client.on(
       }
 
       const prefixCommand = message.content?.trim().match(/^!(\S+)/)?.[1]?.toLowerCase();
+      if (['play', 'pause', 'resume', 'skip', 'stop', 'queue', 'volume', 'shuffle'].includes(prefixCommand)) {
+        await musicController.handlePrefix(message, prefixCommand);
+        return;
+      }
       if (prefixCommand === 'help') {
         await handleHelpPrefixCommand(message);
         return;

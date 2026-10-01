@@ -25,7 +25,9 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 Comandos slash disponiveis: `/ping`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close` e `/role`.
 
-Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
+Comandos slash de musica: `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/volume` e `/shuffle`. Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban`, `!play`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume`, `!shuffle` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
+
+Os comandos de musica precisam de um servidor Lavalink v4.2+ separado do processo do bot. Configure `LAVALINK_HOST`, `LAVALINK_PORT`, `LAVALINK_PASSWORD` e `LAVALINK_SECURE` nas variaveis do Render e mantenha a senha igual a do servidor Lavalink. `LAVALINK_SEARCH_PREFIX` define o provedor de busca (padrao `ytsearch:`); links diretos funcionam quando o servidor tem o source/plugin correspondente configurado. Servidores Lavalink recentes podem precisar de plugin de fonte do YouTube para buscas e reproducao do YouTube. A fila aceita ate 100 faixas, limita uma playlist a 50 faixas e comeca com volume 70%. Sem um Lavalink conectado, os comandos explicam a configuracao pendente.
 
 `!mute <usuario> <duracao> [motivo] [link de prova]` usa o timeout nativo do Discord, bloqueando mensagens e voz pelo tempo indicado. Duracoes aceitas incluem `30m`, `4h`, `2d` e `1w`, ate o limite de 28 dias. Tambem e possivel anexar a prova na mensagem do comando. `!ban <usuario> [motivo] [link de prova]` aceita prova opcional da mesma forma. Slash `/mute` e `/ban` tambem oferecem campos de link e anexo.
 
