@@ -122,14 +122,6 @@ const GUILD_ID = process.env.GUILD_ID || '';
 
 
 
-const aiChannelId =
-
-  process.env.AI_CHANNEL_ID ||
-
-  '1551729250615304304';
-
-
-
 const TARGET_MATCH_CHANNEL_ID =
 
   process.env.MATCH_CHANNEL_ID ||
@@ -594,11 +586,11 @@ const LOG_CHANNEL_ID =
 
   process.env.LOG_CHANNEL_ID || '';
 
-const MUTE_LOG_CHANNEL_ID =
-  process.env.MUTE_LOG_CHANNEL_ID || '';
+const MODERATION_LOG_CHANNEL_ID =
+  process.env.MODERATION_LOG_CHANNEL_ID || '1555033295648198657';
 
-const BAN_LOG_CHANNEL_ID =
-  process.env.BAN_LOG_CHANNEL_ID || '';
+const WELCOME_CHANNEL_ID =
+  process.env.WELCOME_CHANNEL_ID || '1554638389351940177';
 
 
 
@@ -939,6 +931,8 @@ const client = new Client({
 
     GatewayIntentBits.GuildMessages,
 
+    GatewayIntentBits.GuildInvites,
+
     GatewayIntentBits.MessageContent,
 
     GatewayIntentBits.GuildVoiceStates,
@@ -960,6 +954,8 @@ const spamHistory = new Map();
 const processedAiMessages =
 
   new Set();
+
+const cachedGuildInvites = new Map();
 
 
 
@@ -3635,28 +3631,86 @@ function buildModerationEmbed({ action, target, moderator, reason, duration, pro
   return embed;
 }
 
-async function sendModerationEmbed(guild, payload) {
-  const configuredChannelId = payload.action === 'mute'
-    ? MUTE_LOG_CHANNEL_ID
-    : payload.action === 'ban'
-      ? BAN_LOG_CHANNEL_ID
-      : '';
-  const defaultName = payload.action === 'mute'
-    ? 'mute'
-    : payload.action === 'ban'
-      ? 'ban'
-      : null;
-  const namedChannel = defaultName
-    ? guild.channels.cache.find(
-        channel => channel.isTextBased() && channel.name?.toLowerCase() === defaultName
-      )
-    : null;
-  const logChannelId = configuredChannelId || namedChannel?.id || LOG_CHANNEL_ID;
-  if (!logChannelId) return false;
+async function cacheGuildInvites(guild) {
+  try {
+    const invites = await guild.invites.fetch();
+    cachedGuildInvites.set(
+      guild.id,
+      new Map([...invites.values()].map(invite => [
+        invite.code,
+        { uses: invite.uses || 0 }
+      ]))
+    );
+  } catch (error) {
+    console.warn(`[Welcome] Não foi possível consultar convites em ${guild.name}: ${error.message}`);
+  }
+}
 
-  const channel = await guild.channels.fetch(logChannelId).catch(() => null);
+async function findInviterForJoin(guild) {
+  try {
+    const previousInvites = cachedGuildInvites.get(guild.id);
+    const currentInvites = await guild.invites.fetch();
+    const updatedInvites = new Map([...currentInvites.values()].map(invite => [
+      invite.code,
+      { uses: invite.uses || 0 }
+    ]));
+    cachedGuildInvites.set(guild.id, updatedInvites);
+
+    if (!previousInvites) return null;
+
+    let usedInvite = null;
+    let largestIncrease = 0;
+    for (const invite of currentInvites.values()) {
+      const increase = (invite.uses || 0) - (previousInvites.get(invite.code)?.uses || 0);
+      if (increase > largestIncrease) {
+        usedInvite = invite;
+        largestIncrease = increase;
+      }
+    }
+
+    return usedInvite?.inviter || null;
+  } catch (error) {
+    console.warn(`[Welcome] Não foi possível identificar o convite usado: ${error.message}`);
+    return null;
+  }
+}
+
+function buildWelcomeEmbed(member, inviter) {
+  const accountCreatedAt = Math.floor(member.user.createdTimestamp / 1000);
+  const joinedAt = Math.floor((member.joinedTimestamp || Date.now()) / 1000);
+
+  return new EmbedBuilder()
+    .setColor('#F1C40F')
+    .setTitle('🎉 Novo membro no servidor')
+    .addFields(
+      { name: 'Usuário', value: member.user.username, inline: true },
+      { name: 'ID do Discord', value: `\`${member.id}\``, inline: true },
+      { name: 'Pessoa', value: `${member}`, inline: true },
+      {
+        name: 'Indicado por',
+        value: inviter ? `${inviter} (\`${inviter.id}\`)` : 'Não identificado',
+        inline: true
+      },
+      {
+        name: 'Conta criada',
+        value: `<t:${accountCreatedAt}:F>\n<t:${accountCreatedAt}:R>`,
+        inline: true
+      },
+      {
+        name: 'Entrou no servidor',
+        value: `<t:${joinedAt}:F>\n<t:${joinedAt}:R>`,
+        inline: true
+      }
+    )
+    .setThumbnail(member.user.displayAvatarURL({ extension: 'png', size: 256 }))
+    .setFooter({ text: `Membro #${member.guild.memberCount}` })
+    .setTimestamp();
+}
+
+async function sendModerationEmbed(guild, payload) {
+  const channel = await guild.channels.fetch(MODERATION_LOG_CHANNEL_ID).catch(() => null);
   if (!channel?.isTextBased()) {
-    console.warn(`[Moderation] Canal de log ${logChannelId} não encontrado ou não é de texto.`);
+    console.warn(`[Moderation] Canal de log ${MODERATION_LOG_CHANNEL_ID} não encontrado ou não é de texto.`);
     return false;
   }
 
@@ -3773,7 +3827,7 @@ async function handleModerationPrefixCommand(message, action) {
         : 'banido';
     const logWarning = logSent
       ? ''
-      : `\n⚠️ A ação foi aplicada, mas o registro não foi publicado. Configure ${action === 'mute' ? 'MUTE' : 'BAN'}_LOG_CHANNEL_ID ou LOG_CHANNEL_ID.`;
+      : `\n⚠️ A ação foi aplicada, mas o registro não foi publicado. Verifique o canal ${MODERATION_LOG_CHANNEL_ID} e as permissões do bot.`;
     await replyPrivately(`✅ ${target.tag || target.username} foi ${label}.${logWarning}`);
   } catch (error) {
     console.error(`[Moderation] Falha ao executar ${action}:`, error);
@@ -7121,15 +7175,17 @@ async function handleSpam(
 
       );
 
-
-
-      await sendLog(
-
-        message.guild,
-
-        ` **Anti-spam**\n${message.author} recebeu timeout de 1 minuto.`
-
-      );
+      const logSent = await sendModerationEmbed(message.guild, {
+        action: 'mute',
+        target: message.member.user,
+        moderator: client.user,
+        reason: 'Anti-spam automático',
+        duration: 60 * 1000,
+        proofs: []
+      });
+      if (!logSent) {
+        console.warn(`[Moderation] Timeout anti-spam aplicado, mas o registro não foi publicado no canal ${MODERATION_LOG_CHANNEL_ID}.`);
+      }
 
     }
 
@@ -12620,7 +12676,7 @@ async function handleSlashCommand(
             : command === 'mute'
               ? `silenciado por ${formatModerationDuration(duration)}`
               : 'banido'
-        }.${logSent ? '' : '\n⚠️ A ação foi aplicada, mas o log não foi publicado. Configure MUTE_LOG_CHANNEL_ID, BAN_LOG_CHANNEL_ID ou LOG_CHANNEL_ID.'}`,
+        }.${logSent ? '' : `\n⚠️ A ação foi aplicada, mas o log não foi publicado. Verifique o canal ${MODERATION_LOG_CHANNEL_ID} e as permissões do bot.`}`,
 
         ephemeral: true
 
@@ -13069,12 +13125,10 @@ client.once(
   async () => {
 
     console.log(
-
       `Bot conectado como ${client.user.tag}`
-
     );
 
-
+    await Promise.all(client.guilds.cache.map(cacheGuildInvites));
 
     console.log(
 
@@ -13264,6 +13318,38 @@ client.once(
   }
 
 );
+
+client.on(Events.InviteCreate, invite => {
+  const invites = cachedGuildInvites.get(invite.guild?.id);
+  if (!invites) return;
+  invites.set(invite.code, {
+    uses: invite.uses || 0
+  });
+});
+
+client.on(Events.InviteDelete, invite => {
+  if (invite.guild) {
+    cachedGuildInvites.get(invite.guild.id)?.delete(invite.code);
+  }
+});
+
+client.on(Events.GuildMemberAdd, async member => {
+  const inviter = await findInviterForJoin(member.guild);
+  const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
+  if (!channel?.isTextBased()) {
+    console.warn(`[Welcome] Canal ${WELCOME_CHANNEL_ID} não encontrado ou não é de texto.`);
+    return;
+  }
+
+  try {
+    await channel.send({
+      embeds: [buildWelcomeEmbed(member, inviter)],
+      allowedMentions: { parse: [] }
+    });
+  } catch (error) {
+    console.error('[Welcome] Não foi possível publicar a entrada:', error);
+  }
+});
 
 
 
@@ -15055,49 +15141,19 @@ client.on(
 
 
 
-      const repliedToBot =
+      const repliedMessage = message.reference?.messageId
+        ? await message.channel.messages.fetch(message.reference.messageId).catch(() => null)
+        : null;
 
-        message.reference
-
-          ?.messageId
-
-          ? await message.channel.messages
-
-              .fetch(
-
-                message.reference
-
-                  .messageId
-
-              )
-
-              .then(
-
-                m =>
-
-                  m.author.id ===
-
-                  client.user.id
-
-              )
-
-              .catch(
-
-                () => false
-
-              )
-
-          : false;
+      const repliedToBot = repliedMessage?.author.id === client.user.id;
 
 
 
       if (
 
-        (mentionedBot ||
+        mentionedBot ||
 
-          repliedToBot) &&
-
-        hasAIProvider()
+        repliedToBot
 
       ) {
 
@@ -15173,6 +15229,9 @@ client.on(
 
             .trim();
 
+        const prompt = repliedToBot && repliedMessage.content
+          ? `Mensagem anterior do bot: ${repliedMessage.content.slice(0, 1200)}\n\nMensagem do usuário: ${question}`
+          : question;
 
 
         if (!question) {
@@ -15203,7 +15262,7 @@ client.on(
 
               message.guild.id,
 
-              question
+              prompt
 
             );
 
