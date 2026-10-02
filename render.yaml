@@ -18,3 +18,11 @@ services:
         value: dev.lavalink.youtube:youtube-plugin:1.18.2
       - key: PLUGINS_YOUTUBE_ENABLED
         value: "true"
+
+databases:
+  - name: videos-postgres
+    databaseName: discord_bot
+    user: discord_bot
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+    ipAllowList: []
