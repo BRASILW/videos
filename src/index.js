@@ -1389,11 +1389,74 @@ function loadRankCallConfig() {
   }
 }
 
-function saveRankCallConfig() {
+async function saveRankCallConfig() {
+  let localSaved = false;
   try {
     fs.writeFileSync(RANK_CALL_CONFIG_FILE, JSON.stringify(rankCallConfig, null, 2), 'utf8');
+    localSaved = true;
   } catch (e) {
     console.warn('[RankCall] Erro ao salvar configuração:', e.message);
+  }
+
+  if (dbReady && db) {
+    const result = await q(`
+      INSERT INTO bot_settings (setting_key, setting_value, updated_at)
+      VALUES ('rank-call-config', $1::jsonb, NOW())
+      ON CONFLICT (setting_key)
+      DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()
+    `, [JSON.stringify(rankCallConfig)]);
+    if (!result) {
+      throw new Error('A configuração do RankCall foi alterada nesta sessão, mas não foi salva no PostgreSQL.');
+    }
+    return 'database';
+  }
+
+  if (!localSaved) {
+    throw new Error('Não foi possível salvar a configuração local do RankCall.');
+  }
+  return 'local';
+}
+
+async function loadRankCallConfigFromDatabase() {
+  if (!dbReady || !db) return false;
+
+  try {
+    const result = await q(`
+      SELECT setting_value
+      FROM bot_settings
+      WHERE setting_key = 'rank-call-config'
+    `);
+    if (!result) {
+      console.warn('[RankCall] Não foi possível carregar a configuração persistente do PostgreSQL.');
+      return false;
+    }
+
+    const savedConfig = result.rows?.[0]?.setting_value;
+    if (!savedConfig) {
+      await saveRankCallConfig();
+      console.log('[RankCall] Configuração local inicial copiada para o PostgreSQL.');
+      return false;
+    }
+    const config = typeof savedConfig === 'string' ? JSON.parse(savedConfig) : savedConfig;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+      throw new Error('A configuração persistida do RankCall está em formato inválido.');
+    }
+
+    rankCallConfig = {
+      ...DEFAULT_RANK_CALL_CONFIG,
+      ...config,
+      color: normalizeHexColor(config.color || DEFAULT_RANK_CALL_CONFIG.color)
+    };
+    try {
+      fs.writeFileSync(RANK_CALL_CONFIG_FILE, JSON.stringify(rankCallConfig, null, 2), 'utf8');
+    } catch (error) {
+      console.warn('[RankCall] Configuração carregada do PostgreSQL, mas o cache local falhou:', error.message);
+    }
+    console.log('[RankCall] Configuração persistente do painel carregada do PostgreSQL.');
+    return true;
+  } catch (error) {
+    console.error('[RankCall] Erro ao carregar configuração persistente:', error.message);
+    return false;
   }
 }
 
@@ -3420,25 +3483,11 @@ async function syncLocalVoiceHoursToDatabase() {
       throw new Error('Não foi possível ler as horas principais e seus backups no PostgreSQL.');
     }
 
-    const persistedHours = mergePersistedVoiceHours(usersResult.rows, backupResult.rows);
-
-    for (const [key, secondsRaw] of voiceHoursLocal.entries()) {
-      if (persistedHours.has(key)) continue;
-      const [guildId, userId] = String(key).split(':');
-      const seconds = Math.max(0, Math.floor(Number(secondsRaw) || 0));
-      if (!guildId || !userId) continue;
-
-      const persistedSeconds = await persistVoiceHoursToDatabase(
-        guildId,
-        userId,
-        String(userId),
-        seconds
-      );
-      if (!Number.isFinite(persistedSeconds)) {
-        throw new Error(`Não foi possível conciliar as horas de ${key}.`);
-      }
-      voiceHoursLocal.set(key, persistedSeconds);
-    }
+    const persistedHours = mergePersistedVoiceHours(
+      usersResult.rows,
+      backupResult.rows,
+      voiceHoursLocal
+    );
 
     for (const [key, seconds] of persistedHours) {
       const [guildId, userId] = key.split(':');
@@ -5670,9 +5719,22 @@ async function handleRankCallConfigModal(interaction) {
   }
 
   rankCallConfig[option] = option === 'color' ? (value || DEFAULT_RANK_CALL_CONFIG.color) : value;
-  saveRankCallConfig();
+  let persistence;
+  try {
+    persistence = await saveRankCallConfig();
+  } catch (error) {
+    await interaction.reply({
+      content: `⚠️ A configuração mudou nesta sessão, mas não foi persistida: ${error.message}`,
+      flags: MessageFlags.Ephemeral
+    });
+    await refreshRankCallPanel();
+    return;
+  }
   saveRankCallBackup(`config-${option}`);
-  await interaction.reply({ content: `. ${option === 'title' ? 'Título' : option === 'description' ? 'Descrição' : option === 'color' ? 'Cor' : option === 'icon' ? 'ícone' : 'Banner'} atualizado.`, flags: MessageFlags.Ephemeral });
+  const persistenceMessage = persistence === 'database'
+    ? 'salvo no PostgreSQL'
+    : 'salvo apenas localmente; o Render pode descartar ao reiniciar';
+  await interaction.reply({ content: `✅ ${option === 'title' ? 'Título' : option === 'description' ? 'Descrição' : option === 'color' ? 'Cor' : option === 'icon' ? 'Ícone' : 'Banner'} atualizado e ${persistenceMessage}.`, flags: MessageFlags.Ephemeral });
   await refreshRankCallPanel();
 }
 
@@ -5685,7 +5747,16 @@ async function handleRankCallConfigButton(interaction) {
   const id = interaction.customId;
   if (id === 'rankconfig_reset') {
     rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG, channelId: RANK_CALL_CHANNEL_ID, page: rankCallConfig.page || 0, streakPage: rankCallConfig.streakPage || 0 };
-    saveRankCallConfig();
+    try {
+      await saveRankCallConfig();
+    } catch (error) {
+      await interaction.reply({
+        content: `⚠️ A configuração padrão foi aplicada nesta sessão, mas não foi persistida: ${error.message}`,
+        flags: MessageFlags.Ephemeral
+      }).catch(() => {});
+      await refreshRankCallPanel();
+      return true;
+    }
     saveRankCallBackup('config-reset');
     await interaction.update({ embeds: [buildRankCallConfigEmbed()], components: buildRankCallConfigComponents() }).catch(() => {});
     await refreshRankCallPanel();
@@ -13762,6 +13833,7 @@ client.once(
 
 
     await initDB();
+    await loadRankCallConfigFromDatabase();
     startDirectMessageCleanup();
     await restoreStatsDashboardPanels();
     startStatsDashboardRefresh();

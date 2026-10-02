@@ -32,3 +32,23 @@ test('retains zeroed totals and ignores malformed rows', () => {
   assert.equal(totals.get('guild:reset-user'), 0);
   assert.equal(totals.has(':invalid'), false);
 });
+
+test('recovers local hours over an old database row when no durable backup exists', () => {
+  const totals = mergePersistedVoiceHours(
+    [{ guild_id: 'guild', user_id: 'user', voice_seconds: 134 }],
+    [],
+    new Map([['guild:user', 54442]])
+  );
+
+  assert.equal(totals.get('guild:user'), 54442);
+});
+
+test('does not resurrect stale local hours after an intentional database reset', () => {
+  const totals = mergePersistedVoiceHours(
+    [{ guild_id: 'guild', user_id: 'user', voice_seconds: 0 }],
+    [{ guild_id: 'guild', user_id: 'user', voice_seconds: 0 }],
+    new Map([['guild:user', 54442]])
+  );
+
+  assert.equal(totals.get('guild:user'), 0);
+});
