@@ -27,6 +27,7 @@ const {
   reconcileRankCallStreakData,
   shiftRankCallDate: shiftRankCallDateValue
 } = require('./rank-call-streak-utils');
+const { mergePersistedVoiceHours } = require('./voice-hours-utils');
 
 
 
@@ -3405,41 +3406,24 @@ async function syncLocalVoiceHoursToDatabase() {
   if (!dbReady || !db) return;
 
   try {
-    const backupResult = await q(`
+    const [backupResult, usersResult] = await Promise.all([
+      q(`
       SELECT guild_id, user_id, voice_seconds
       FROM voice_hours_backup_state
-    `);
-    if (!backupResult?.rows) {
-      throw new Error('Não foi possível ler o estado de backup das horas.');
-    }
-    const backupState = new Map();
-    for (const row of backupResult.rows) {
-      const guildId = String(row.guild_id || '');
-      const userId = String(row.user_id || '');
-      const seconds = Number(row.voice_seconds);
-      if (!guildId || !userId || !Number.isFinite(seconds) || seconds < 0) continue;
-      backupState.set(`${guildId}:${userId}`, Math.floor(seconds));
+      `),
+      q(`
+        SELECT guild_id, user_id, voice_seconds
+        FROM bot_users
+      `)
+    ]);
+    if (!backupResult?.rows || !usersResult?.rows) {
+      throw new Error('Não foi possível ler as horas principais e seus backups no PostgreSQL.');
     }
 
-    for (const [key, seconds] of backupState) {
-      const [guildId, userId] = key.split(':');
-      const result = await q(`
-        INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
-        VALUES ($1, $2, $2, $3, NOW())
-        ON CONFLICT (guild_id, user_id)
-        DO UPDATE SET
-          voice_seconds = EXCLUDED.voice_seconds,
-          last_seen = NOW()
-        RETURNING voice_seconds
-      `, [guildId, userId, seconds]);
-      if (!result?.rows?.length) {
-        throw new Error(`Não foi possível restaurar o backup de horas de ${key}.`);
-      }
-      voiceHoursLocal.set(key, seconds);
-    }
+    const persistedHours = mergePersistedVoiceHours(usersResult.rows, backupResult.rows);
 
     for (const [key, secondsRaw] of voiceHoursLocal.entries()) {
-      if (backupState.has(key)) continue;
+      if (persistedHours.has(key)) continue;
       const [guildId, userId] = String(key).split(':');
       const seconds = Math.max(0, Math.floor(Number(secondsRaw) || 0));
       if (!guildId || !userId) continue;
@@ -3456,41 +3440,22 @@ async function syncLocalVoiceHoursToDatabase() {
       voiceHoursLocal.set(key, persistedSeconds);
     }
 
-    const result = await q(`
-      SELECT bu.guild_id, bu.user_id, bu.voice_seconds,
-             backup.voice_seconds AS backup_seconds
-      FROM bot_users bu
-      LEFT JOIN voice_hours_backup_state backup
-        ON backup.guild_id = bu.guild_id
-       AND backup.user_id = bu.user_id
-    `);
-    if (!result?.rows) {
-      console.warn('[DB] Não foi possível carregar as horas confirmadas do PostgreSQL.');
-      return;
-    }
-
-    for (const row of result.rows) {
-      const guildId = String(row.guild_id || '');
-      const userId = String(row.user_id || '');
-      const seconds = Number(row.backup_seconds ?? row.voice_seconds);
-      if (!guildId || !userId || !Number.isFinite(seconds) || seconds < 0) continue;
-      const key = `${guildId}:${userId}`;
-      const normalizedSeconds = Math.floor(seconds);
-      voiceHoursLocal.set(key, normalizedSeconds);
-      if (!backupState.has(key)) {
-        const persisted = await persistVoiceHoursToDatabase(
-          guildId,
-          userId,
-          String(userId),
-          normalizedSeconds,
-          { replace: true }
-        );
-        if (!Number.isFinite(persisted)) {
-          throw new Error(`Não foi possível criar o backup inicial de ${key}.`);
-        }
+    for (const [key, seconds] of persistedHours) {
+      const [guildId, userId] = key.split(':');
+      const persistedSeconds = await persistVoiceHoursToDatabase(
+        guildId,
+        userId,
+        userId,
+        seconds
+      );
+      if (!Number.isFinite(persistedSeconds)) {
+        throw new Error(`Não foi possível reconciliar as horas e o backup de ${key}.`);
       }
+      voiceHoursLocal.set(key, persistedSeconds);
     }
-    saveVoiceHoursLocal();
+    if (!saveVoiceHoursLocal()) {
+      console.warn('[DB] PostgreSQL reconciliado, mas não foi possível atualizar o cache local das horas.');
+    }
     console.log('[DB] Horas locais conciliadas com PostgreSQL.');
   } catch (error) {
     console.error('[DB] Erro ao sincronizar horas locais:', error.message);
