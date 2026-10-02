@@ -2079,8 +2079,8 @@ function getLiveRankCallStreakRanking(guild) {
       changed = true;
     }
 
-    // A sequncia só fica ATIVA no painel depois que a pessoa
-    // completar 30 minutos acumulados de call no dia atual.
+    // A meta de hoje estende a sequência, mas a sequência concluída
+    // permanece visível durante o dia enquanto ontem foi qualificado.
     const todaySeconds = Number(streak?.dailySeconds?.[today] || 0);
     const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
 
@@ -2101,11 +2101,13 @@ function getLiveRankCallStreakRanking(guild) {
 
     const currentStreak = Number(streak.currentStreak) || 0;
 
-    // Não exibe a sequncia como ativa antes dos 30 minutos do dia.
-    // O histórico continua salvo normalmente; ao completar 30 min,
-    // a data de hoje  adicionada e a sequncia volta a aparecer.
-    if (todayQualified && currentStreak > 0) {
-      rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
+    if (currentStreak > 0) {
+      rows.push({
+        userId,
+        streak: currentStreak,
+        bestStreak: Number(streak.bestStreak) || 0,
+        todayQualified
+      });
     }
   }
 
@@ -5348,7 +5350,7 @@ function buildRankCallStreakEmbed(guild, page = 0) {
 
   const description = rows.length
     ? rows.map((row, index) =>
-        `**${start + index + 1}.** <@${row.userId}> • ${RANK_CALL_STREAK_EMOJI} **Sequência: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**`
+      `**${start + index + 1}.** <@${row.userId}> • ${RANK_CALL_STREAK_EMOJI} **Sequência: ${row.streak} ${row.streak === 1 ? 'dia' : 'dias'}**${row.todayQualified ? ' • meta de hoje concluída' : ' • faça 30 min hoje para manter'}`
       ).join('\n')
     : `${RANK_CALL_STREAK_EMOJI} Nenhum usuário possui uma sequência ativa no momento.`;
 
@@ -5356,7 +5358,7 @@ function buildRankCallStreakEmbed(guild, page = 0) {
     title: `${RANK_CALL_STREAK_EMOJI} Sequência de dias em Call`,
     description,
     color: normalizeHexColor(rankCallConfig.color),
-    footer: `30 minutos acumulados em call por dia • Dias históricos salvos • Página ${safePage + 1}/${totalPages}  ${guild.name}`
+    footer: `Sequências de ontem continuam visíveis até o fim do dia • 30 minutos em call hoje para manter • Página ${safePage + 1}/${totalPages}  ${guild.name}`
   });
 
   // O painel de sequência usa o banner estático enviado para essa finalidade.

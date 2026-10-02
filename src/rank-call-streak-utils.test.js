@@ -50,6 +50,16 @@ test('calculates the current streak only when the latest qualified date is today
   );
 });
 
+test('keeps a four-day streak visible on the following day while today is still pending', () => {
+  const streak = calculateRankCallCurrentStreak(
+    ['2026-09-28', '2026-09-29', '2026-09-30', '2026-10-01'],
+    '2026-10-02'
+  );
+
+  assert.equal(streak.currentStreak, 4);
+  assert.equal(streak.lastActiveDate, '2026-10-01');
+});
+
 test('caps malformed daily values at one day and ignores malformed dates', () => {
   const record = reconcileRankCallStreakData({
     dates: ['not-a-date'],
