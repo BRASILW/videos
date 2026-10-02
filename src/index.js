@@ -21,11 +21,17 @@ const http = require('http');
 const fs = require('fs');
 
 const path = require('path');
+const {
+  calculateRankCallCurrentStreak: calculateReconciledRankCallCurrentStreak,
+  mergeRankCallStreakData,
+  reconcileRankCallStreakData,
+  shiftRankCallDate: shiftRankCallDateValue
+} = require('./rank-call-streak-utils');
 
 
 
 const {
-
+  AuditLogEvent,
   ActionRowBuilder,
 
   ActivityType,
@@ -599,6 +605,9 @@ const LOG_CHANNEL_ID =
 const MODERATION_LOG_CHANNEL_ID =
   process.env.MODERATION_LOG_CHANNEL_ID || '1555033295648198657';
 
+const GENERAL_LOG_CHANNEL_ID =
+  process.env.GENERAL_LOG_CHANNEL_ID || '1551958147252490320';
+
 const WELCOME_CHANNEL_ID =
   process.env.WELCOME_CHANNEL_ID || '1554638389351940177';
 
@@ -938,7 +947,7 @@ const client = new Client({
     GatewayIntentBits.Guilds,
 
     GatewayIntentBits.GuildMembers,
-
+    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.GuildMessages,
 
     GatewayIntentBits.GuildInvites,
@@ -951,7 +960,7 @@ const client = new Client({
 
   ],
 
-  partials: [Partials.Channel]
+  partials: [Partials.Channel, Partials.Message]
 
 });
 
@@ -1359,7 +1368,9 @@ const DEFAULT_RANK_CALL_CONFIG = {
 let rankCallConfig = { ...DEFAULT_RANK_CALL_CONFIG };
 
 const rankCallStreaks = new Map();
+const rankCallPersistenceQueues = new Map();
 let rankCallBackupTimer = null;
+let rankCallShuttingDown = false;
 
 
 
@@ -1799,31 +1810,12 @@ async function restoreAfkUsersOnReady() {
   }
 }
 
-function normalizeRankCallStreakData(raw = {}) {
-  const dates = Array.isArray(raw?.dates)
-    ? [...new Set(raw.dates.map(value => String(value).trim()).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(value)))].sort()
-    : [];
-  const dailySeconds = {};
-  if (raw?.dailySeconds && typeof raw.dailySeconds === 'object') {
-    for (const [dateKey, value] of Object.entries(raw.dailySeconds)) {
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
-      const seconds = Math.max(0, Math.floor(Number(value) || 0));
-      if (seconds > 0) dailySeconds[dateKey] = seconds;
-    }
-  }
-  for (const dateKey of dates) {
-    if (!Object.prototype.hasOwnProperty.call(dailySeconds, dateKey)) dailySeconds[dateKey] = RANK_CALL_STREAK_MIN_SECONDS;
-  }
-  const historicalStats = calculateRankCallCurrentStreak(dates);
-  const lastQualifiedDate = String(raw?.lastQualifiedDate || raw?.lastActiveDate || dates[dates.length - 1] || '');
-  return {
-    dates, dailySeconds,
-    currentStreak: Math.max(0, Math.floor(Number(raw?.currentStreak) || historicalStats.currentStreak || 0)),
-    bestStreak: Math.max(Number(raw?.bestStreak) || 0, historicalStats.bestStreak || 0),
-    lastActiveDate: String(raw?.lastActiveDate || lastQualifiedDate),
-    lastQualifiedDate,
-    missedDayNotified: String(raw?.missedDayNotified || '')
-  };
+function normalizeRankCallStreakData(raw = {}, timestamp = Date.now()) {
+  return reconcileRankCallStreakData(
+    raw,
+    RANK_CALL_STREAK_MIN_SECONDS,
+    getRankCallDateKey(timestamp)
+  );
 }
 
 function loadRankCallStreaks() {
@@ -1833,6 +1825,24 @@ function loadRankCallStreaks() {
     for (const [key, raw] of Object.entries(data || {})) rankCallStreaks.set(key, normalizeRankCallStreakData(raw));
   } catch (e) {
     console.warn('[RankCall] Erro ao carregar sequências:', e.message);
+  }
+}
+
+function enqueueRankCallDatabaseWrite(key, write) {
+  const previous = rankCallPersistenceQueues.get(key) || Promise.resolve();
+  const pending = previous.catch(() => {}).then(write);
+  rankCallPersistenceQueues.set(key, pending);
+  pending.finally(() => {
+    if (rankCallPersistenceQueues.get(key) === pending) {
+      rankCallPersistenceQueues.delete(key);
+    }
+  }).catch(() => {});
+  return pending;
+}
+
+async function flushRankCallDatabaseWrites() {
+  while (rankCallPersistenceQueues.size > 0) {
+    await Promise.all([...rankCallPersistenceQueues.values()].map(write => write.catch(() => {})));
   }
 }
 
@@ -1848,6 +1858,7 @@ function saveRankCallStreaks() {
       'utf8'
     );
 
+    const writes = [];
     if (dbReady && db) {
       for (const [key, record] of rankCallStreaks.entries()) {
         const parts = String(key).split(':');
@@ -1858,18 +1869,16 @@ function saveRankCallStreaks() {
           continue;
         }
 
-        void persistRankCallStreakToDatabase(
-          guildId,
-          userId,
-          record
-        );
+        writes.push(persistRankCallStreakToDatabase(guildId, userId, record));
       }
     }
+    return Promise.all(writes);
   } catch (e) {
     console.warn(
       '[RankCall] Erro ao salvar sequências:',
       e.message
     );
+    return Promise.resolve([]);
   }
 }
 function getRankCallDateKey(timestamp = Date.now()) {
@@ -1901,29 +1910,11 @@ function getRankCallDayStart(dateKey) {
 }
 
 function shiftRankCallDate(dateKey, deltaDays) {
-  const date = new Date(`${dateKey}T12:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + deltaDays);
-  return date.toISOString().slice(0, 10);
+  return shiftRankCallDateValue(dateKey, deltaDays);
 }
 
 function calculateRankCallCurrentStreak(dates) {
-  const uniqueDates = [...new Set((dates || []).filter(value => /^\d{4}-\d{2}-\d{2}$/.test(String(value))).map(String))].sort();
-  if (!uniqueDates.length) return { currentStreak: 0, bestStreak: 0, lastActiveDate: '' };
-  let bestStreak = 1, run = 1;
-  for (let i = 1; i < uniqueDates.length; i += 1) {
-    if (shiftRankCallDate(uniqueDates[i - 1], 1) === uniqueDates[i]) run += 1; else run = 1;
-    bestStreak = Math.max(bestStreak, run);
-  }
-  const lastActiveDate = uniqueDates[uniqueDates.length - 1];
-  const today = getRankCallDateKey();
-  const yesterday = shiftRankCallDate(today, -1);
-  if (lastActiveDate !== today && lastActiveDate !== yesterday) return { currentStreak: 0, bestStreak, lastActiveDate };
-  let currentStreak = 1, cursor = lastActiveDate;
-  for (let i = uniqueDates.length - 2; i >= 0; i -= 1) {
-    const previous = shiftRankCallDate(cursor, -1);
-    if (uniqueDates[i] === previous) { currentStreak += 1; cursor = uniqueDates[i]; } else break;
-  }
-  return { currentStreak, bestStreak, lastActiveDate };
+  return calculateReconciledRankCallCurrentStreak(dates, getRankCallDateKey());
 }
 
 function getOrCreateRankCallStreak(guildId, userId) {
@@ -1995,7 +1986,7 @@ function addRankCallDailySeconds(guildId, userId, dateKey, seconds) {
       guildId,
       userId,
       dateKey,
-      appliedAmount
+      after
     );
   }
 
@@ -2025,6 +2016,12 @@ async function evaluateRankCallStreaks(now = Date.now()) {
   for (const [key, record] of rankCallStreaks) {
     const [guildId, userId] = key.split(':');
     if (!guildId || !userId) continue;
+
+    const reconciled = normalizeRankCallStreakData(record, now);
+    if (JSON.stringify(record) !== JSON.stringify(reconciled)) {
+      Object.assign(record, reconciled);
+      changed = true;
+    }
 
     const todaySeconds = Number(record.dailySeconds?.[today] || 0);
     const todayQualified = todaySeconds >= RANK_CALL_STREAK_MIN_SECONDS;
@@ -2060,7 +2057,7 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     }
   }
 
-  if (changed) saveRankCallStreaks();
+  if (changed) await saveRankCallStreaks();
   return changed;
 }
 
@@ -2075,6 +2072,12 @@ function getLiveRankCallStreakRanking(guild) {
   for (const [key, streak] of rankCallStreaks) {
     const [guildId, userId] = key.split(':');
     if (guildId !== guild.id) continue;
+
+    const reconciled = normalizeRankCallStreakData(streak);
+    if (JSON.stringify(streak) !== JSON.stringify(reconciled)) {
+      Object.assign(streak, reconciled);
+      changed = true;
+    }
 
     // A sequncia só fica ATIVA no painel depois que a pessoa
     // completar 30 minutos acumulados de call no dia atual.
@@ -2101,12 +2104,12 @@ function getLiveRankCallStreakRanking(guild) {
     // Não exibe a sequncia como ativa antes dos 30 minutos do dia.
     // O histórico continua salvo normalmente; ao completar 30 min,
     // a data de hoje  adicionada e a sequncia volta a aparecer.
-    if (currentStreak > 0) {
+    if (todayQualified && currentStreak > 0) {
       rows.push({ userId, streak: currentStreak, bestStreak: Number(streak.bestStreak) || 0 });
     }
   }
 
-  if (changed) saveRankCallStreaks();
+  if (changed) void saveRankCallStreaks();
   return rows.sort((a, b) => b.streak - a.streak || b.bestStreak - a.bestStreak || a.userId.localeCompare(b.userId));
 }
 
@@ -2114,6 +2117,16 @@ async function saveRankCallBackup(reason = 'auto') {
   try {
     fs.mkdirSync(RANK_CALL_BACKUP_DIR, { recursive: true });
     await checkpointLocalVoiceSessions();
+    if (dbReady && voiceHoursBackupReady) {
+      try {
+        await persistVoiceHoursBackupSnapshot(reason);
+      } catch (error) {
+        console.error('[RankCall] Backup PostgreSQL falhou; mantendo também o snapshot local:', error.message);
+      }
+    }
+    else if (process.env.RENDER === 'true') {
+      console.warn('[RankCall] Backup PostgreSQL indisponível no Render: configure DATABASE_URL; backups em arquivo local não sobrevivem a todos os deploys.');
+    }
 
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const safeReason = String(reason || 'auto').replace(/[^a-z0-9_-]/gi, '_').slice(0, 40);
@@ -2154,6 +2167,7 @@ function startRankCallBackupScheduler() {
   if (rankCallBackupTimer) return;
   void saveRankCallBackup('startup');
   rankCallBackupTimer = setInterval(() => void saveRankCallBackup('auto'), 60 * 60 * 1000);
+  console.log('[RankCall] Backup automático das horas e sequências a cada hora ativado.');
 }
 
 let voiceCheckpointQueue = Promise.resolve();
@@ -2202,33 +2216,19 @@ async function performVoiceSessionCheckpoint() {
     let databaseSaved = false;
 
     if (dbReady && db) {
-      const result = await q(`
-        INSERT INTO bot_users (
-          guild_id,
-          user_id,
-          username,
-          voice_seconds,
-          last_seen
-        )
-        VALUES ($1, $2, $3, $4, NOW())
-        ON CONFLICT (guild_id, user_id)
-        DO UPDATE SET
-          voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
-          username = EXCLUDED.username,
-          last_seen = NOW()
-        RETURNING voice_seconds
-      `, [
-        guildId,
-        userId,
-        String(userId),
-        totalSeconds
-      ]);
-      if (result?.rows?.length) {
-        const persistedSeconds = Number(result.rows[0].voice_seconds || 0);
-        voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
-        databaseSaved = true;
-      } else {
-        console.warn(`[RankCall] Checkpoint de ${guildId}:${userId} não foi confirmado no banco; tentando manter no arquivo local.`);
+      try {
+        const persistedSeconds = await persistVoiceHoursToDatabase(
+          guildId,
+          userId,
+          String(userId),
+          totalSeconds
+        );
+        if (Number.isFinite(persistedSeconds)) {
+          voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
+          databaseSaved = true;
+        }
+      } catch (error) {
+        console.warn(`[RankCall] Checkpoint de ${guildId}:${userId} não confirmado no banco; tentando manter no arquivo local: ${error.message}`);
       }
     }
 
@@ -2274,7 +2274,7 @@ async function performVoiceSessionCheckpoint() {
   }
 
   if (streakChanged) {
-    saveRankCallStreaks();
+    await saveRankCallStreaks();
   }
 
   await evaluateRankCallStreaks(now);
@@ -2286,9 +2286,8 @@ let voiceConnection = null;
 
 let db = null;
 
-
-
 let dbReady = false;
+let voiceHoursBackupReady = false;
 
 
 loadRankCallConfig();
@@ -2557,10 +2556,11 @@ function memberRoleIds(member) {
 
 
 async function ensureRankCallDatabaseTables() {
-  if (!dbReady || !db) return;
+  if (!dbReady || !db) return false;
+  voiceHoursBackupReady = false;
 
   try {
-    await q(`
+    const dailyTable = await q(`
       CREATE TABLE IF NOT EXISTS rank_call_daily (
         guild_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
@@ -2569,8 +2569,9 @@ async function ensureRankCallDatabaseTables() {
         PRIMARY KEY (guild_id, user_id, date_key)
       )
     `);
+    if (!dailyTable) throw new Error('PostgreSQL não confirmou rank_call_daily.');
 
-    await q(`
+    const streakTable = await q(`
       CREATE TABLE IF NOT EXISTS rank_call_streaks (
         guild_id TEXT NOT NULL,
         user_id TEXT NOT NULL,
@@ -2585,11 +2586,121 @@ async function ensureRankCallDatabaseTables() {
         PRIMARY KEY (guild_id, user_id)
       )
     `);
+    if (!streakTable) throw new Error('PostgreSQL não confirmou rank_call_streaks.');
 
+    const backupStateTable = await q(`
+      CREATE TABLE IF NOT EXISTS voice_hours_backup_state (
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        voice_seconds BIGINT NOT NULL DEFAULT 0,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (guild_id, user_id)
+      )
+    `);
+    if (!backupStateTable) throw new Error('PostgreSQL não confirmou voice_hours_backup_state.');
+
+    const backupHistoryTable = await q(`
+      CREATE TABLE IF NOT EXISTS voice_hours_backup_history (
+        backup_id BIGSERIAL PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        voice_seconds BIGINT NOT NULL DEFAULT 0,
+        reason TEXT NOT NULL DEFAULT 'scheduled',
+        snapshot_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    if (!backupHistoryTable) throw new Error('PostgreSQL não confirmou voice_hours_backup_history.');
+
+    voiceHoursBackupReady = true;
     console.log('[RankCall] Tabelas PostgreSQL do RankCall verificadas.');
+    return true;
   } catch (error) {
+    voiceHoursBackupReady = false;
     console.warn('[RankCall] Erro ao criar tabelas PostgreSQL:', error.message);
+    return false;
   }
+}
+
+async function persistVoiceHoursToDatabase(
+  guildId,
+  userId,
+  username,
+  seconds,
+  { replace = false, recordHistory = false } = {}
+) {
+  if (!dbReady || !db || !voiceHoursBackupReady) return null;
+  const amount = Math.max(0, Math.floor(Number(seconds) || 0));
+  const result = await q(`
+    WITH saved_hours AS (
+      INSERT INTO bot_users (
+        guild_id, user_id, username, voice_seconds, last_seen
+      )
+      VALUES ($1, $2, $3, $4, NOW())
+      ON CONFLICT (guild_id, user_id)
+      DO UPDATE SET
+        username = EXCLUDED.username,
+        voice_seconds = CASE
+          WHEN $5::boolean THEN EXCLUDED.voice_seconds
+          ELSE GREATEST(COALESCE(bot_users.voice_seconds, 0), EXCLUDED.voice_seconds)
+        END,
+        last_seen = NOW()
+      RETURNING guild_id, user_id, voice_seconds
+    ),
+    saved_backup AS (
+      INSERT INTO voice_hours_backup_state (
+        guild_id, user_id, voice_seconds, updated_at
+      )
+      SELECT guild_id, user_id, voice_seconds, NOW()
+      FROM saved_hours
+      ON CONFLICT (guild_id, user_id)
+      DO UPDATE SET
+        voice_seconds = EXCLUDED.voice_seconds,
+        updated_at = NOW()
+      RETURNING voice_seconds
+    )
+    SELECT voice_seconds FROM saved_hours
+  `, [String(guildId), String(userId), String(username || userId), amount, replace]);
+  if (!result?.rows?.length) {
+    throw new Error(`PostgreSQL não confirmou as horas de ${guildId}:${userId}.`);
+  }
+  if (recordHistory) {
+    const historyResult = await q(`
+      INSERT INTO voice_hours_backup_history (
+        guild_id, user_id, voice_seconds, reason, snapshot_at
+      )
+      SELECT guild_id, user_id, voice_seconds, 'voice-session-end', NOW()
+      FROM voice_hours_backup_state
+      WHERE guild_id = $1 AND user_id = $2
+    `, [String(guildId), String(userId)]);
+    if (!historyResult) {
+      console.warn(`[RankCall] O estado atual de ${guildId}:${userId} foi salvo, mas o histórico de backup não foi confirmado.`);
+    }
+  }
+  return Number(result.rows[0].voice_seconds);
+}
+
+async function persistVoiceHoursBackupSnapshot(reason = 'scheduled') {
+  if (!dbReady || !db || !voiceHoursBackupReady) return false;
+  const result = await q(`
+    INSERT INTO voice_hours_backup_history (
+      guild_id, user_id, voice_seconds, reason, snapshot_at
+    )
+    SELECT guild_id, user_id, voice_seconds, $1, NOW()
+    FROM voice_hours_backup_state
+    WHERE voice_seconds > 0
+  `, [String(reason || 'scheduled').slice(0, 40)]);
+  if (!result) {
+    throw new Error('PostgreSQL não confirmou o backup periódico das horas.');
+  }
+  const cleanup = await q(`
+    DELETE FROM voice_hours_backup_history
+    WHERE snapshot_at < NOW() - INTERVAL '90 days'
+  `);
+  if (!cleanup) {
+    console.warn('[RankCall] Não foi possível remover backups com mais de 90 dias.');
+  }
+  console.log(`[RankCall] Backup PostgreSQL das horas salvo (${reason}).`);
+  return true;
 }
 
 async function persistRankCallDailyToDatabase(guildId, userId, dateKey, seconds) {
@@ -2598,90 +2709,112 @@ async function persistRankCallDailyToDatabase(guildId, userId, dateKey, seconds)
   const amount = Math.max(0, Math.floor(Number(seconds) || 0));
   if (amount <= 0) return;
 
-  try {
-    await q(`
-      INSERT INTO rank_call_daily (
-        guild_id,
-        user_id,
-        date_key,
-        seconds
-      )
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (guild_id, user_id, date_key)
-      DO UPDATE SET
-        seconds = EXCLUDED.seconds
-    `, [
-      String(guildId),
-      String(userId),
-      String(dateKey),
-      amount
-    ]);
-  } catch (error) {
-    console.warn(
-      `[RankCall] Erro ao persistir diário ${guildId}:${userId}:${dateKey}:`,
-      error.message
-    );
-  }
+  return enqueueRankCallDatabaseWrite(
+    `daily:${guildId}:${userId}:${dateKey}`,
+    async () => {
+      try {
+        await q(`
+          INSERT INTO rank_call_daily (
+            guild_id,
+            user_id,
+            date_key,
+            seconds
+          )
+          VALUES ($1, $2, $3, $4)
+          ON CONFLICT (guild_id, user_id, date_key)
+          DO UPDATE SET
+            seconds = GREATEST(rank_call_daily.seconds, EXCLUDED.seconds)
+        `, [
+          String(guildId),
+          String(userId),
+          String(dateKey),
+          amount
+        ]);
+      } catch (error) {
+        console.warn(
+          `[RankCall] Erro ao persistir diário ${guildId}:${userId}:${dateKey}:`,
+          error.message
+        );
+      }
+    }
+  );
 }
 
 async function persistRankCallStreakToDatabase(guildId, userId, record) {
   if (!dbReady || !db || !record) return;
 
-  try {
-    await q(`
-      INSERT INTO rank_call_streaks (
-        guild_id,
-        user_id,
-        dates,
-        daily_seconds,
-        current_streak,
-        best_streak,
-        last_active_date,
-        last_qualified_date,
-        missed_day_notified,
-        updated_at
-      )
-      VALUES (
-        $1,
-        $2,
-        $3::jsonb,
-        $4::jsonb,
-        $5,
-        $6,
-        $7,
-        $8,
-        $9,
-        NOW()
-      )
-      ON CONFLICT (guild_id, user_id)
-      DO UPDATE SET
-        dates = EXCLUDED.dates,
-        daily_seconds = EXCLUDED.daily_seconds,
-        current_streak = EXCLUDED.current_streak,
-        best_streak = EXCLUDED.best_streak,
-        last_active_date = EXCLUDED.last_active_date,
-        last_qualified_date = EXCLUDED.last_qualified_date,
-        missed_day_notified = EXCLUDED.missed_day_notified,
-        updated_at = NOW()
-    `, [
-      String(guildId),
-      String(userId),
-      JSON.stringify(Array.isArray(record.dates) ? record.dates : []),
-      JSON.stringify(record.dailySeconds && typeof record.dailySeconds === 'object'
-        ? record.dailySeconds
-        : {}),
-      Number(record.currentStreak) || 0,
-      Number(record.bestStreak) || 0,
-      String(record.lastActiveDate || ''),
-      String(record.lastQualifiedDate || ''),
-      String(record.missedDayNotified || '')
-    ]);
-  } catch (error) {
-    console.warn(
-      `[RankCall] Erro ao persistir streak ${guildId}:${userId}:`,
-      error.message
-    );
-  }
+  const snapshot = normalizeRankCallStreakData(record);
+  return enqueueRankCallDatabaseWrite(
+    `streak:${guildId}:${userId}`,
+    async () => {
+      try {
+        await q(`
+          INSERT INTO rank_call_streaks (
+            guild_id,
+            user_id,
+            dates,
+            daily_seconds,
+            current_streak,
+            best_streak,
+            last_active_date,
+            last_qualified_date,
+            missed_day_notified,
+            updated_at
+          )
+          VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7, $8, $9, NOW())
+          ON CONFLICT (guild_id, user_id)
+          DO UPDATE SET
+            dates = (
+              SELECT COALESCE(
+                jsonb_agg(to_jsonb(merged_dates.date_key) ORDER BY merged_dates.date_key),
+                '[]'::jsonb
+              )
+              FROM (
+                SELECT DISTINCT date_key
+                FROM jsonb_array_elements_text(
+                  rank_call_streaks.dates || EXCLUDED.dates
+                ) AS all_dates(date_key)
+              ) AS merged_dates
+            ),
+            daily_seconds = (
+              SELECT COALESCE(jsonb_object_agg(date_key, seconds), '{}'::jsonb)
+              FROM (
+                SELECT date_key, MAX(seconds)::bigint AS seconds
+                FROM (
+                  SELECT key AS date_key, value::bigint AS seconds
+                  FROM jsonb_each_text(rank_call_streaks.daily_seconds)
+                  UNION ALL
+                  SELECT key AS date_key, value::bigint AS seconds
+                  FROM jsonb_each_text(EXCLUDED.daily_seconds)
+                ) AS all_daily
+                GROUP BY date_key
+              ) AS merged_daily
+            ),
+            current_streak = EXCLUDED.current_streak,
+            best_streak = GREATEST(rank_call_streaks.best_streak, EXCLUDED.best_streak),
+            last_active_date = EXCLUDED.last_active_date,
+            last_qualified_date = EXCLUDED.last_qualified_date,
+            missed_day_notified = EXCLUDED.missed_day_notified,
+            updated_at = NOW()
+        `, [
+          String(guildId),
+          String(userId),
+          JSON.stringify(snapshot.dates),
+          JSON.stringify(snapshot.dailySeconds),
+          Number(snapshot.currentStreak) || 0,
+          Number(snapshot.bestStreak) || 0,
+          String(snapshot.lastActiveDate || ''),
+          String(snapshot.lastQualifiedDate || ''),
+          String(snapshot.missedDayNotified || '')
+        ]);
+      } catch (error) {
+        console.warn(
+          `[RankCall] Erro ao persistir streak ${guildId}:${userId}:`,
+          error.message
+        );
+      }
+    }
+  );
 }
 
 async function loadRankCallStreaksFromDatabase() {
@@ -2702,7 +2835,7 @@ async function loadRankCallStreaksFromDatabase() {
       FROM rank_call_streaks
     `);
 
-    let loaded = 0;
+    const records = new Map();
 
     for (const row of result.rows || []) {
       const guildId = String(row.guild_id || '');
@@ -2728,44 +2861,8 @@ async function loadRankCallStreaksFromDatabase() {
         dailySeconds = {};
       }
 
-      const MAX_DAILY_SECONDS = 24 * 60 * 60;
-      let dailySecondsChanged = false;
-
-      if (
-        dailySeconds &&
-        typeof dailySeconds === 'object' &&
-        !Array.isArray(dailySeconds)
-      ) {
-        for (const [dateKey, rawSeconds] of Object.entries(dailySeconds)) {
-          const seconds = Math.max(
-            0,
-            Math.floor(Number(rawSeconds) || 0)
-          );
-
-          const safeSeconds = Math.min(
-            seconds,
-            MAX_DAILY_SECONDS
-          );
-
-          if (safeSeconds !== seconds) {
-            console.warn(
-              `[RankCall] Corrigindo diário inválido no PostgreSQL ${guildId}:${userId} | ${dateKey} | ${seconds}s -> ${safeSeconds}s`
-            );
-
-            dailySeconds[dateKey] = safeSeconds;
-            dailySecondsChanged = true;
-          } else {
-            dailySeconds[dateKey] = seconds;
-          }
-        }
-      } else {
-        dailySeconds = {};
-        dailySecondsChanged = true;
-      }
-
       const key = `${guildId}:${userId}`;
-
-      const record = {
+      records.set(key, {
         dates: Array.isArray(dates) ? dates : [],
         dailySeconds,
         currentStreak: Number(row.current_streak) || 0,
@@ -2773,27 +2870,58 @@ async function loadRankCallStreaksFromDatabase() {
         lastActiveDate: String(row.last_active_date || ''),
         lastQualifiedDate: String(row.last_qualified_date || ''),
         missedDayNotified: String(row.missed_day_notified || '')
-      };
-
-      rankCallStreaks.set(
-        key,
-        record
-      );
-
-      if (dailySecondsChanged) {
-        void persistRankCallStreakToDatabase(
-          guildId,
-          userId,
-          record
-        );
-      }
-
-      loaded++;
+      });
     }
 
-    if (loaded > 0) {
-      saveRankCallStreaks();
-      console.log(`[RankCall] ${loaded} streak(s) carregada(s) do PostgreSQL.`);
+    for (const [key, localRecord] of rankCallStreaks) {
+      const databaseRecord = records.get(key);
+      records.set(
+        key,
+        databaseRecord
+          ? mergeRankCallStreakData(databaseRecord, localRecord)
+          : localRecord
+      );
+    }
+
+    const dailyResult = await q(`
+      SELECT guild_id, user_id, date_key, seconds
+      FROM rank_call_daily
+    `);
+    for (const row of dailyResult?.rows || []) {
+      const guildId = String(row.guild_id || '');
+      const userId = String(row.user_id || '');
+      const dateKey = String(row.date_key || '');
+      if (!guildId || !userId || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) continue;
+
+      const key = `${guildId}:${userId}`;
+      const record = records.get(key) || {
+        dates: [],
+        dailySeconds: {},
+        currentStreak: 0,
+        bestStreak: 0,
+        lastActiveDate: '',
+        lastQualifiedDate: '',
+        missedDayNotified: ''
+      };
+      const dailySeconds = record.dailySeconds && typeof record.dailySeconds === 'object'
+        ? record.dailySeconds
+        : {};
+      dailySeconds[dateKey] = Math.max(
+        Number(dailySeconds[dateKey]) || 0,
+        Math.min(24 * 60 * 60, Math.max(0, Math.floor(Number(row.seconds) || 0)))
+      );
+      record.dailySeconds = dailySeconds;
+      records.set(key, record);
+    }
+
+    for (const [key, rawRecord] of records) {
+      const record = normalizeRankCallStreakData(rawRecord);
+      rankCallStreaks.set(key, record);
+    }
+
+    if (records.size > 0) {
+      await saveRankCallStreaks();
+      console.log(`[RankCall] ${records.size} streak(s) reconciliada(s) do PostgreSQL.`);
     }
   } catch (error) {
     console.warn('[RankCall] Erro ao carregar streaks do PostgreSQL:', error.message);
@@ -3275,31 +3403,64 @@ async function syncLocalVoiceHoursToDatabase() {
   if (!dbReady || !db) return;
 
   try {
+    const backupResult = await q(`
+      SELECT guild_id, user_id, voice_seconds
+      FROM voice_hours_backup_state
+    `);
+    if (!backupResult?.rows) {
+      throw new Error('Não foi possível ler o estado de backup das horas.');
+    }
+    const backupState = new Map();
+    for (const row of backupResult.rows) {
+      const guildId = String(row.guild_id || '');
+      const userId = String(row.user_id || '');
+      const seconds = Number(row.voice_seconds);
+      if (!guildId || !userId || !Number.isFinite(seconds) || seconds < 0) continue;
+      backupState.set(`${guildId}:${userId}`, Math.floor(seconds));
+    }
+
+    for (const [key, seconds] of backupState) {
+      const [guildId, userId] = key.split(':');
+      const result = await q(`
+        INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
+        VALUES ($1, $2, $2, $3, NOW())
+        ON CONFLICT (guild_id, user_id)
+        DO UPDATE SET
+          voice_seconds = EXCLUDED.voice_seconds,
+          last_seen = NOW()
+        RETURNING voice_seconds
+      `, [guildId, userId, seconds]);
+      if (!result?.rows?.length) {
+        throw new Error(`Não foi possível restaurar o backup de horas de ${key}.`);
+      }
+      voiceHoursLocal.set(key, seconds);
+    }
+
     for (const [key, secondsRaw] of voiceHoursLocal.entries()) {
+      if (backupState.has(key)) continue;
       const [guildId, userId] = String(key).split(':');
       const seconds = Math.max(0, Math.floor(Number(secondsRaw) || 0));
       if (!guildId || !userId) continue;
 
-      if (seconds === 0) {
-        await q(`
-          INSERT INTO bot_users (guild_id, user_id, voice_seconds)
-          VALUES ($1,$2,0)
-          ON CONFLICT (guild_id,user_id)
-          DO NOTHING
-        `, [guildId, userId]);
-      } else {
-        await q(`
-          INSERT INTO bot_users (guild_id, user_id, voice_seconds)
-          VALUES ($1,$2,$3)
-          ON CONFLICT (guild_id,user_id)
-          DO NOTHING
-        `, [guildId, userId, seconds]);
+      const persistedSeconds = await persistVoiceHoursToDatabase(
+        guildId,
+        userId,
+        String(userId),
+        seconds
+      );
+      if (!Number.isFinite(persistedSeconds)) {
+        throw new Error(`Não foi possível conciliar as horas de ${key}.`);
       }
+      voiceHoursLocal.set(key, persistedSeconds);
     }
 
     const result = await q(`
-      SELECT guild_id, user_id, voice_seconds
-      FROM bot_users
+      SELECT bu.guild_id, bu.user_id, bu.voice_seconds,
+             backup.voice_seconds AS backup_seconds
+      FROM bot_users bu
+      LEFT JOIN voice_hours_backup_state backup
+        ON backup.guild_id = bu.guild_id
+       AND backup.user_id = bu.user_id
     `);
     if (!result?.rows) {
       console.warn('[DB] Não foi possível carregar as horas confirmadas do PostgreSQL.');
@@ -3309,9 +3470,23 @@ async function syncLocalVoiceHoursToDatabase() {
     for (const row of result.rows) {
       const guildId = String(row.guild_id || '');
       const userId = String(row.user_id || '');
-      const seconds = Number(row.voice_seconds);
+      const seconds = Number(row.backup_seconds ?? row.voice_seconds);
       if (!guildId || !userId || !Number.isFinite(seconds) || seconds < 0) continue;
-      voiceHoursLocal.set(`${guildId}:${userId}`, Math.floor(seconds));
+      const key = `${guildId}:${userId}`;
+      const normalizedSeconds = Math.floor(seconds);
+      voiceHoursLocal.set(key, normalizedSeconds);
+      if (!backupState.has(key)) {
+        const persisted = await persistVoiceHoursToDatabase(
+          guildId,
+          userId,
+          String(userId),
+          normalizedSeconds,
+          { replace: true }
+        );
+        if (!Number.isFinite(persisted)) {
+          throw new Error(`Não foi possível criar o backup inicial de ${key}.`);
+        }
+      }
     }
     saveVoiceHoursLocal();
     console.log('[DB] Horas locais conciliadas com PostgreSQL.');
@@ -4177,9 +4352,9 @@ async function askAI(
   }
 
   const systemPrompt = [
-    'Responda em português brasileiro, de forma natural, direta e adequada a uma conversa casual de Discord.',
-    'Pode usar gírias e palavrões comuns quando combinarem com o contexto; não repreenda nem recuse apenas porque alguém usou palavrão.',
-    'Mantenha brincadeiras sem transformar a resposta em assédio direcionado, ataques discriminatórios, ameaças ou incentivo a violência real.',
+    'Você é o parceiro descontraído e zoeiro do servidor: responda em português brasileiro, com naturalidade, personalidade e sem formalidade excessiva.',
+    'Pode usar gírias e palavrões comuns quando combinarem com o contexto, inclusive em brincadeiras; não repreenda nem recuse só porque alguém xingou.',
+    'Faça piadas sem partir para assédio direcionado, ataques discriminatórios, ameaças ou incentivo a violência real.',
     systemExtra
   ].filter(Boolean).join('\n\n');
 
@@ -4726,34 +4901,20 @@ async function updateVoiceSession(
   saveVoiceHoursLocal();
 
   if (dbReady) {
-    const result = await q(`
-      INSERT INTO bot_users (
-        guild_id,
-        user_id,
-        username,
-        voice_seconds,
-        last_seen
-      )
-      VALUES ($1,$2,$3,$4,NOW())
-      ON CONFLICT (guild_id,user_id)
-      DO UPDATE SET
-        voice_seconds = GREATEST(bot_users.voice_seconds, EXCLUDED.voice_seconds),
-        username = EXCLUDED.username,
-        last_seen = NOW()
-      RETURNING voice_seconds
-    `, [
-      guild.id,
-      member.id,
-      member.user?.tag || member.user?.username || String(member.id),
-      totalSeconds
-    ]);
-
-    if (result?.rows?.length) {
-      const persistedSeconds = Number(result.rows[0].voice_seconds || 0);
-      voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
-      saveVoiceHoursLocal();
-    } else {
-      console.warn(`[RankCall] Horas de ${guild.id}:${member.id} mantidas localmente até a confirmação no banco.`);
+    try {
+      const persistedSeconds = await persistVoiceHoursToDatabase(
+        guild.id,
+        member.id,
+        member.user?.tag || member.user?.username || String(member.id),
+        totalSeconds,
+        { recordHistory: true }
+      );
+      if (Number.isFinite(persistedSeconds)) {
+        voiceHoursLocal.set(key, Math.max(totalSeconds, persistedSeconds));
+        saveVoiceHoursLocal();
+      }
+    } catch (error) {
+      console.warn(`[RankCall] Horas de ${guild.id}:${member.id} mantidas localmente até a confirmação no banco: ${error.message}`);
     }
   }
 
@@ -5612,11 +5773,13 @@ async function refreshRankCallPanel() {
 }
 
 function startRankCallAutoRefresh() {
+  if (rankCallShuttingDown) return;
   if (globalThis.__rankCallAutoRefreshTimer) {
     clearInterval(globalThis.__rankCallAutoRefreshTimer);
   }
 
   globalThis.__rankCallAutoRefreshTimer = setInterval(() => {
+    if (rankCallShuttingDown) return;
     void refreshRankCallPanel();
   }, 5000);
 
@@ -5644,6 +5807,20 @@ async function handleRankCallPrefixCommand(message) {
       return true;
     }
 
+    const changesVoiceHours = [
+      'rankreset',
+      'rankadd',
+      'rankremove',
+      'rankset',
+      'rankresetall'
+    ].includes(command);
+    if (changesVoiceHours && process.env.RENDER === 'true' && (!dbReady || !voiceHoursBackupReady)) {
+      await message.channel.send(
+        '⛔ Não alterei as horas: PostgreSQL ou as tabelas de backup não estão disponíveis. O disco local pode ser descartado em reinícios/deploys. Confira `DATABASE_URL` e as permissões do banco no Render.'
+      ).catch(() => {});
+      return true;
+    }
+
     if (command === 'rankrecreate') {
       await publishRankCallPanel(message.guild, { recreate: true, page: 0, streakPage: 0 });
       return true;
@@ -5656,10 +5833,27 @@ async function handleRankCallPrefixCommand(message) {
 
     if (command === 'rankresetall') {
       if (dbReady) {
+        const history = await q(`
+          INSERT INTO voice_hours_backup_history (
+            guild_id, user_id, voice_seconds, reason, snapshot_at
+          )
+          SELECT guild_id, user_id, voice_seconds, 'rankresetall-before', NOW()
+          FROM voice_hours_backup_state
+          WHERE guild_id = $1
+        `, [message.guild.id]);
+        if (!history) {
+          throw new Error('Não foi possível salvar um backup antes do reset geral; nenhuma hora foi alterada.');
+        }
         const result = await q(
           `WITH reset_hours AS (
              UPDATE bot_users
              SET voice_seconds = 0, last_seen = NOW()
+             WHERE guild_id = $1
+             RETURNING guild_id
+           ),
+           reset_backup AS (
+             UPDATE voice_hours_backup_state
+             SET voice_seconds = 0, updated_at = NOW()
              WHERE guild_id = $1
              RETURNING guild_id
            ),
@@ -5725,7 +5919,16 @@ async function handleRankCallPrefixCommand(message) {
           ? deltaSeconds
           : 0;
       const result = await q(`
-        WITH saved_hours AS (
+        WITH history_before AS (
+          INSERT INTO voice_hours_backup_history (
+            guild_id, user_id, voice_seconds, reason, snapshot_at
+          )
+          SELECT guild_id, user_id, voice_seconds, 'hours-command-before', NOW()
+          FROM voice_hours_backup_state
+          WHERE guild_id = $1 AND user_id = $2
+          RETURNING backup_id
+        ),
+        saved_hours AS (
           INSERT INTO bot_users (guild_id, user_id, username, voice_seconds, last_seen)
           VALUES ($1,$2,$3,$4,NOW())
           ON CONFLICT (guild_id,user_id)
@@ -5739,6 +5942,26 @@ async function handleRankCallPrefixCommand(message) {
             END,
             last_seen = NOW()
           RETURNING voice_seconds
+        ),
+        saved_backup AS (
+          INSERT INTO voice_hours_backup_state (
+            guild_id, user_id, voice_seconds, updated_at
+          )
+          SELECT $1, $2, voice_seconds, NOW()
+          FROM saved_hours
+          ON CONFLICT (guild_id, user_id)
+          DO UPDATE SET
+            voice_seconds = EXCLUDED.voice_seconds,
+            updated_at = NOW()
+          RETURNING voice_seconds
+        ),
+        history_backup AS (
+          INSERT INTO voice_hours_backup_history (
+            guild_id, user_id, voice_seconds, reason, snapshot_at
+          )
+          SELECT $1, $2, voice_seconds, 'hours-command', NOW()
+          FROM saved_hours
+          RETURNING backup_id
         ),
         reset_session AS (
           UPDATE voice_sessions
@@ -13577,8 +13800,8 @@ client.once(
     startStatsDashboardRefresh();
     await loadBotPresenceFromDatabase();
     applyBotPresence();
-    await syncLocalVoiceHoursToDatabase();
     await ensureRankCallDatabaseTables();
+    await syncLocalVoiceHoursToDatabase();
     await loadRankCallStreaksFromDatabase();
     await restoreRankCallVoiceSessionsFromDB();
 
@@ -13593,6 +13816,7 @@ client.once(
     initializeRankCallVoiceSessions();
     syncRankCallVoiceSessionsFromVoiceStates();
     await checkpointLocalVoiceSessions();
+    startRankCallBackupScheduler();
     startRankCallAutoRefresh();
     await refreshRankCallPanel();
     await restoreAfkUsersOnReady();
@@ -13763,9 +13987,119 @@ client.on(Events.InviteDelete, invite => {
   }
 });
 
+function auditValue(value, limit = 900) {
+  const text = String(value ?? '').trim();
+  if (!text) return '—';
+  return text.length > limit ? `${text.slice(0, limit - 3)}...` : text;
+}
+
+function isGeneralLogChannel(channel) {
+  return String(channel?.id || '') === String(GENERAL_LOG_CHANNEL_ID);
+}
+
+async function findAuditLogExecutor(guild, type, targetId) {
+  try {
+    const logs = await guild.fetchAuditLogs({ type, limit: 6 });
+    const now = Date.now();
+    const entry = logs.entries.find(candidate =>
+      candidate.target?.id === targetId &&
+      now - candidate.createdTimestamp < 15_000
+    );
+    return entry?.executor || null;
+  } catch (error) {
+    console.warn(`[Audit] Não foi possível identificar executor (${type}) em ${guild.id}:`, error.message);
+    return null;
+  }
+}
+
+async function sendGeneralAuditLog(guild, {
+  activity,
+  user = null,
+  target = null,
+  details = '',
+  channel = null,
+  timestamp = new Date()
+}) {
+  try {
+    if (isGeneralLogChannel(channel)) return false;
+
+    const logChannel = await client.channels.fetch(GENERAL_LOG_CHANNEL_ID).catch(() => null);
+    if (!logChannel?.isTextBased() || !logChannel.guild) {
+      console.warn(`[Audit] Canal geral ${GENERAL_LOG_CHANNEL_ID} não encontrado ou não é um canal de texto.`);
+      return false;
+    }
+
+    const userId = user?.id || user?.user?.id || null;
+    const userTag = user?.tag || user?.user?.tag || user?.username || user?.user?.username || 'Não identificado';
+    const embed = new EmbedBuilder()
+      .setColor('#ED4245')
+      .setTitle('Registro de atividade do servidor')
+      .addFields(
+        {
+          name: 'Usuário',
+          value: userId ? `<@${userId}> (${auditValue(userTag, 128)})` : auditValue(userTag, 200),
+          inline: true
+        },
+        {
+          name: 'ID',
+          value: userId ? `\`${userId}\`` : 'Não identificado',
+          inline: true
+        },
+        {
+          name: 'Atividade',
+          value: auditValue(activity, 256),
+          inline: false
+        }
+      )
+      .setTimestamp(timestamp instanceof Date ? timestamp : new Date(timestamp));
+
+    if (target) {
+      const targetId = target.id || target.user?.id;
+      const targetName = target.tag || target.user?.tag || target.username || target.user?.username || 'Usuário';
+      embed.addFields({
+        name: 'Alvo',
+        value: targetId ? `<@${targetId}> (${auditValue(targetName, 128)}) · \`${targetId}\`` : auditValue(targetName, 200),
+        inline: false
+      });
+    }
+
+    if (channel) {
+      const channelId = channel.id;
+      const channelName = channel.name ? `#${channel.name}` : `canal ${channelId}`;
+      embed.addFields({
+        name: 'Canal',
+        value: channelId ? `${channelName} · \`${channelId}\`` : auditValue(channelName, 200),
+        inline: false
+      });
+    }
+
+    if (details) {
+      embed.addFields({ name: 'Detalhes', value: auditValue(details), inline: false });
+    }
+
+    const avatarUrl = user?.displayAvatarURL?.({ extension: 'png', size: 128 })
+      || user?.user?.displayAvatarURL?.({ extension: 'png', size: 128 });
+    if (avatarUrl) embed.setThumbnail(avatarUrl);
+
+    await logChannel.send({
+      embeds: [embed],
+      allowedMentions: { parse: [] }
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Audit] Não foi possível publicar "${activity}" no canal ${GENERAL_LOG_CHANNEL_ID}:`, error.message);
+    return false;
+  }
+}
+
 client.on(Events.GuildMemberAdd, async member => {
   if (!await claimDiscordEvent('member-join', `${member.guild.id}:${member.id}:${member.joinedTimestamp || 'unknown'}`)) return;
   await recordDailyGuildStats(member.guild.id, { joins: 1 });
+  void sendGeneralAuditLog(member.guild, {
+    activity: 'Entrou no servidor',
+    user: member.user,
+    details: `Conta criada: <t:${Math.floor(member.user.createdTimestamp / 1000)}:F>`
+  });
   const inviter = await findInviterForJoin(member.guild);
   const channel = await client.channels.fetch(WELCOME_CHANNEL_ID).catch(() => null);
   if (!channel?.isTextBased()) {
@@ -13787,6 +14121,289 @@ client.on(Events.GuildMemberRemove, async member => {
   const joinedAt = member.joinedTimestamp || 'unknown';
   if (!await claimDiscordEvent('member-leave', `${member.guild.id}:${member.id}:${joinedAt}`)) return;
   await recordDailyGuildStats(member.guild.id, { leaves: 1 });
+  void sendGeneralAuditLog(member.guild, {
+    activity: 'Saiu do servidor',
+    user: member.user,
+    details: `Tempo desde a entrada: ${member.joinedTimestamp ? `<t:${Math.floor(member.joinedTimestamp / 1000)}:R>` : 'Não disponível'}`
+  });
+});
+
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  const changes = [];
+  if (oldMember.nickname !== newMember.nickname) {
+    changes.push(`Apelido: ${auditValue(oldMember.nickname || 'sem apelido', 100)} → ${auditValue(newMember.nickname || 'sem apelido', 100)}`);
+  }
+  const oldRoles = new Set(oldMember.roles.cache.keys());
+  const newRoles = new Set(newMember.roles.cache.keys());
+  const addedRoles = [...newRoles].filter(roleId => !oldRoles.has(roleId)).map(roleId => newMember.guild.roles.cache.get(roleId)?.name || roleId);
+  const removedRoles = [...oldRoles].filter(roleId => !newRoles.has(roleId)).map(roleId => oldMember.guild.roles.cache.get(roleId)?.name || roleId);
+  if (addedRoles.length) changes.push(`Cargos adicionados: ${addedRoles.join(', ')}`);
+  if (removedRoles.length) changes.push(`Cargos removidos: ${removedRoles.join(', ')}`);
+  if (oldMember.communicationDisabledUntilTimestamp !== newMember.communicationDisabledUntilTimestamp) {
+    changes.push(newMember.communicationDisabledUntilTimestamp
+      ? `Timeout até <t:${Math.floor(newMember.communicationDisabledUntilTimestamp / 1000)}:F>`
+      : 'Timeout removido');
+  }
+  if (!changes.length) return;
+
+  const executor = await findAuditLogExecutor(
+    newMember.guild,
+    AuditLogEvent.MemberUpdate,
+    newMember.id
+  );
+  void sendGeneralAuditLog(newMember.guild, {
+    activity: 'Perfil ou permissões de membro alterados',
+    user: executor || newMember.user,
+    target: newMember.user,
+    details: changes.join('\n')
+  });
+});
+
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+  if (newState.member?.user?.bot || oldState.member?.user?.bot) return;
+  const member = newState.member || oldState.member;
+  if (!member) return;
+
+  const oldChannel = oldState.channel;
+  const newChannel = newState.channel;
+  const changes = [];
+  if (!oldState.channelId && newState.channelId) {
+    changes.push(`Entrou na call ${newChannel ? `**${newChannel.name}**` : newState.channelId}`);
+  } else if (oldState.channelId && !newState.channelId) {
+    changes.push(`Saiu da call ${oldChannel ? `**${oldChannel.name}**` : oldState.channelId}`);
+  } else if (oldState.channelId !== newState.channelId) {
+    changes.push(`Mudou de **${oldChannel?.name || oldState.channelId}** para **${newChannel?.name || newState.channelId}**`);
+  }
+  if (oldState.selfMute !== newState.selfMute) changes.push(newState.selfMute ? 'Microfone próprio desativado' : 'Microfone próprio ativado');
+  if (oldState.selfDeaf !== newState.selfDeaf) changes.push(newState.selfDeaf ? 'Áudio próprio desativado' : 'Áudio próprio ativado');
+  if (oldState.serverMute !== newState.serverMute) changes.push(newState.serverMute ? 'Microfone silenciado pela equipe' : 'Silenciamento de microfone removido');
+  if (oldState.serverDeaf !== newState.serverDeaf) changes.push(newState.serverDeaf ? 'Áudio silenciado pela equipe' : 'Silenciamento de áudio removido');
+  if (oldState.streaming !== newState.streaming) changes.push(newState.streaming ? 'Iniciou transmissão de tela' : 'Encerrou transmissão de tela');
+  if (oldState.selfVideo !== newState.selfVideo) changes.push(newState.selfVideo ? 'Ligou a câmera' : 'Desligou a câmera');
+  if (!changes.length) return;
+
+  let actor = member.user;
+  if (oldState.serverMute !== newState.serverMute || oldState.serverDeaf !== newState.serverDeaf) {
+    actor = await findAuditLogExecutor(
+      newState.guild,
+      AuditLogEvent.MemberUpdate,
+      member.id
+    ) || actor;
+  }
+  void sendGeneralAuditLog(newState.guild, {
+    activity: 'Atividade de voz',
+    user: actor,
+    target: actor.id === member.id ? null : member.user,
+    details: changes.join('\n'),
+    channel: newChannel || oldChannel
+  });
+});
+
+client.on(Events.MessageDelete, async message => {
+  if (!message.guild || message.author?.bot || isGeneralLogChannel(message.channel)) return;
+  if (!await claimDiscordEvent('audit-message-delete', message.id)) return;
+  const author = message.author || await message.fetch().then(value => value.author).catch(() => null);
+  void sendGeneralAuditLog(message.guild, {
+    activity: 'Mensagem apagada',
+    user: author,
+    details: [
+      `Canal: <#${message.channelId}>`,
+      `Conteúdo: ${message.content ? `\n${message.content}` : 'não disponível (mensagem parcial ou sem texto)'}`,
+      message.attachments?.size ? `Anexos: ${[...message.attachments.values()].map(item => item.url).join('\n')}` : ''
+    ].filter(Boolean).join('\n'),
+    channel: message.channel
+  });
+});
+
+client.on(Events.MessageBulkDelete, async messages => {
+  const sample = messages.first();
+  if (!sample?.guild || isGeneralLogChannel(sample.channel)) return;
+  if (!await claimDiscordEvent('audit-message-bulk-delete', `${sample.channelId}:${sample.id}:${messages.size}`)) return;
+  void sendGeneralAuditLog(sample.guild, {
+    activity: 'Mensagens apagadas em massa',
+    user: null,
+    details: `Quantidade: ${messages.size}\nCanal: <#${sample.channelId}>`
+  });
+});
+
+client.on(Events.MessageUpdate, async (oldMessage, newMessage) => {
+  const message = newMessage.partial
+    ? await newMessage.fetch().catch(() => newMessage)
+    : newMessage;
+  if (!message.guild || message.author?.bot || isGeneralLogChannel(message.channel)) return;
+  if (!await claimDiscordEvent('audit-message-update', `${message.id}:${message.editedTimestamp || ''}`)) return;
+  const oldContent = oldMessage.content || '(conteúdo anterior indisponível)';
+  const newContent = message.content || '(sem texto)';
+  if (oldContent === newContent) return;
+  void sendGeneralAuditLog(message.guild, {
+    activity: 'Mensagem editada',
+    user: message.author,
+    details: `Antes:\n${oldContent}\n\nDepois:\n${newContent}`,
+    channel: message.channel,
+    timestamp: message.editedAt || new Date()
+  });
+});
+
+client.on(Events.ChannelCreate, async channel => {
+  if (!channel.guild || isGeneralLogChannel(channel)) return;
+  const executor = await findAuditLogExecutor(channel.guild, AuditLogEvent.ChannelCreate, channel.id);
+  void sendGeneralAuditLog(channel.guild, {
+    activity: 'Canal criado',
+    user: executor,
+    details: `Nome: ${channel.name}\nTipo: ${channel.type}`,
+    channel
+  });
+});
+
+client.on(Events.ChannelDelete, async channel => {
+  if (!channel.guild || isGeneralLogChannel(channel)) return;
+  const executor = await findAuditLogExecutor(channel.guild, AuditLogEvent.ChannelDelete, channel.id);
+  void sendGeneralAuditLog(channel.guild, {
+    activity: 'Canal apagado',
+    user: executor,
+    details: `Nome: ${channel.name}\nTipo: ${channel.type}\nID: ${channel.id}`
+  });
+});
+
+client.on(Events.ChannelUpdate, async (oldChannel, newChannel) => {
+  if (!newChannel.guild || isGeneralLogChannel(newChannel)) return;
+  const changes = [];
+  if (oldChannel.name !== newChannel.name) changes.push(`Nome: ${oldChannel.name} → ${newChannel.name}`);
+  if (oldChannel.parentId !== newChannel.parentId) changes.push(`Categoria alterada: ${oldChannel.parent?.name || 'nenhuma'} → ${newChannel.parent?.name || 'nenhuma'}`);
+  if (oldChannel.topic !== newChannel.topic && 'topic' in newChannel) changes.push(`Tópico: ${auditValue(oldChannel.topic || 'vazio', 250)} → ${auditValue(newChannel.topic || 'vazio', 250)}`);
+  if (oldChannel.rateLimitPerUser !== newChannel.rateLimitPerUser && 'rateLimitPerUser' in newChannel) {
+    changes.push(`Modo lento: ${oldChannel.rateLimitPerUser || 0}s → ${newChannel.rateLimitPerUser || 0}s`);
+  }
+  if (oldChannel.bitrate !== newChannel.bitrate && 'bitrate' in newChannel) {
+    changes.push(`Taxa de bits da voz: ${oldChannel.bitrate || 0} → ${newChannel.bitrate || 0}`);
+  }
+  if (oldChannel.userLimit !== newChannel.userLimit && 'userLimit' in newChannel) {
+    changes.push(`Limite de usuários: ${oldChannel.userLimit || 'sem limite'} → ${newChannel.userLimit || 'sem limite'}`);
+  }
+  if (oldChannel.nsfw !== newChannel.nsfw && 'nsfw' in newChannel) {
+    changes.push(`NSFW: ${oldChannel.nsfw ? 'ativado' : 'desativado'} → ${newChannel.nsfw ? 'ativado' : 'desativado'}`);
+  }
+  const oldOverwrites = oldChannel.permissionOverwrites?.cache
+    ?.map(overwrite => `${overwrite.id}:${overwrite.allow.bitfield}:${overwrite.deny.bitfield}`)
+    .sort()
+    .join('|');
+  const newOverwrites = newChannel.permissionOverwrites?.cache
+    ?.map(overwrite => `${overwrite.id}:${overwrite.allow.bitfield}:${overwrite.deny.bitfield}`)
+    .sort()
+    .join('|');
+  if (oldOverwrites !== newOverwrites) changes.push('Permissões/sobrescritas do canal alteradas');
+  if (!changes.length) return;
+  const executor = await findAuditLogExecutor(newChannel.guild, AuditLogEvent.ChannelUpdate, newChannel.id);
+  void sendGeneralAuditLog(newChannel.guild, {
+    activity: 'Canal modificado',
+    user: executor,
+    details: changes.join('\n'),
+    channel: newChannel
+  });
+});
+
+client.on(Events.GuildRoleCreate, async role => {
+  const executor = await findAuditLogExecutor(role.guild, AuditLogEvent.RoleCreate, role.id);
+  void sendGeneralAuditLog(role.guild, {
+    activity: 'Cargo criado',
+    user: executor,
+    details: `Nome: ${role.name}\nID: ${role.id}`
+  });
+});
+
+client.on(Events.GuildRoleDelete, async role => {
+  const executor = await findAuditLogExecutor(role.guild, AuditLogEvent.RoleDelete, role.id);
+  void sendGeneralAuditLog(role.guild, {
+    activity: 'Cargo apagado',
+    user: executor,
+    details: `Nome: ${role.name}\nID: ${role.id}`
+  });
+});
+
+client.on(Events.GuildRoleUpdate, async (oldRole, newRole) => {
+  const changes = [];
+  if (oldRole.name !== newRole.name) changes.push(`Nome: ${oldRole.name} → ${newRole.name}`);
+  if (oldRole.hexColor !== newRole.hexColor) changes.push(`Cor: ${oldRole.hexColor} → ${newRole.hexColor}`);
+  if (oldRole.hoist !== newRole.hoist) changes.push(`Exibição separada: ${oldRole.hoist ? 'sim' : 'não'} → ${newRole.hoist ? 'sim' : 'não'}`);
+  if (oldRole.mentionable !== newRole.mentionable) changes.push(`Mencionável: ${oldRole.mentionable ? 'sim' : 'não'} → ${newRole.mentionable ? 'sim' : 'não'}`);
+  if (oldRole.permissions.bitfield !== newRole.permissions.bitfield) changes.push('Permissões do cargo alteradas');
+  if (!changes.length) return;
+  const executor = await findAuditLogExecutor(newRole.guild, AuditLogEvent.RoleUpdate, newRole.id);
+  void sendGeneralAuditLog(newRole.guild, {
+    activity: 'Cargo modificado',
+    user: executor,
+    details: changes.join('\n')
+  });
+});
+
+client.on(Events.GuildUpdate, async (oldGuild, newGuild) => {
+  const changes = [];
+  if (oldGuild.name !== newGuild.name) changes.push(`Nome do servidor: ${oldGuild.name} → ${newGuild.name}`);
+  if (oldGuild.icon !== newGuild.icon) changes.push('Ícone do servidor alterado');
+  if (oldGuild.verificationLevel !== newGuild.verificationLevel) {
+    changes.push(`Nível de verificação: ${oldGuild.verificationLevel} → ${newGuild.verificationLevel}`);
+  }
+  if (oldGuild.description !== newGuild.description) changes.push('Descrição do servidor alterada');
+  if (!changes.length) return;
+  const executor = await findAuditLogExecutor(newGuild, AuditLogEvent.GuildUpdate, newGuild.id);
+  void sendGeneralAuditLog(newGuild, {
+    activity: 'Configurações do servidor modificadas',
+    user: executor,
+    details: changes.join('\n')
+  });
+});
+
+client.on(Events.ThreadCreate, async thread => {
+  const executor = await findAuditLogExecutor(thread.guild, AuditLogEvent.ThreadCreate, thread.id);
+  void sendGeneralAuditLog(thread.guild, {
+    activity: 'Tópico criado',
+    user: executor,
+    details: `Nome: ${thread.name}\nID: ${thread.id}`,
+    channel: thread.parent
+  });
+});
+
+client.on(Events.ThreadDelete, async thread => {
+  const executor = await findAuditLogExecutor(thread.guild, AuditLogEvent.ThreadDelete, thread.id);
+  void sendGeneralAuditLog(thread.guild, {
+    activity: 'Tópico apagado',
+    user: executor,
+    details: `Nome: ${thread.name}\nID: ${thread.id}\nCanal pai: ${thread.parent?.name || thread.parentId || 'não disponível'}`
+  });
+});
+
+client.on(Events.ThreadUpdate, async (oldThread, newThread) => {
+  const changes = [];
+  if (oldThread.name !== newThread.name) changes.push(`Nome: ${oldThread.name} → ${newThread.name}`);
+  if (oldThread.archived !== newThread.archived) changes.push(newThread.archived ? 'Tópico arquivado' : 'Tópico reaberto');
+  if (oldThread.locked !== newThread.locked) changes.push(newThread.locked ? 'Tópico bloqueado' : 'Bloqueio removido');
+  if (!changes.length) return;
+  const executor = await findAuditLogExecutor(newThread.guild, AuditLogEvent.ThreadUpdate, newThread.id);
+  void sendGeneralAuditLog(newThread.guild, {
+    activity: 'Tópico modificado',
+    user: executor,
+    details: changes.join('\n'),
+    channel: newThread.parent
+  });
+});
+
+client.on(Events.GuildBanAdd, async ban => {
+  const executor = await findAuditLogExecutor(ban.guild, AuditLogEvent.MemberBanAdd, ban.user.id);
+  void sendGeneralAuditLog(ban.guild, {
+    activity: 'Usuário banido',
+    user: executor || ban.user,
+    target: executor ? ban.user : null,
+    details: ban.reason ? `Motivo: ${ban.reason}` : 'Motivo não informado'
+  });
+});
+
+client.on(Events.GuildBanRemove, async ban => {
+  const executor = await findAuditLogExecutor(ban.guild, AuditLogEvent.MemberBanRemove, ban.user.id);
+  void sendGeneralAuditLog(ban.guild, {
+    activity: 'Banimento removido',
+    user: executor || ban.user,
+    target: executor ? ban.user : null
+  });
 });
 
 async function cleanDirectMessageChannel(channel, allHistory = false) {
@@ -14766,6 +15383,18 @@ client.on(
         return;
       }
       if (!await claimDiscordEvent('message', message.id)) return;
+      if (!isGeneralLogChannel(message.channel)) void sendGeneralAuditLog(message.guild, {
+        activity: 'Mensagem enviada',
+        user: message.author,
+        details: [
+          `Conteúdo:\n${message.content || '(sem texto)'}`,
+          message.attachments.size
+            ? `Anexos:\n${[...message.attachments.values()].map(item => item.url).join('\n')}`
+            : ''
+        ].filter(Boolean).join('\n'),
+        channel: message.channel,
+        timestamp: message.createdAt
+      });
 
       const dailyCommand = message.content?.trim().match(/^!(\S+)/);
       await recordDailyGuildStats(message.guild.id, {
@@ -16138,6 +16767,15 @@ let persistenceShutdownStarted = false;
 async function persistRankCallStateOnShutdown() {
   if (persistenceShutdownStarted) return;
   persistenceShutdownStarted = true;
+  rankCallShuttingDown = true;
+  if (globalThis.__rankCallAutoRefreshTimer) {
+    clearInterval(globalThis.__rankCallAutoRefreshTimer);
+    globalThis.__rankCallAutoRefreshTimer = null;
+  }
+  if (rankCallBackupTimer) {
+    clearInterval(rankCallBackupTimer);
+    rankCallBackupTimer = null;
+  }
   try {
     await checkpointLocalVoiceSessions();
   } catch (error) {
@@ -16145,23 +16783,37 @@ async function persistRankCallStateOnShutdown() {
   }
   saveVoiceHoursLocal();
   saveVoiceSessionsLocal();
-  saveRankCallStreaks();
+  await saveRankCallStreaks();
+  await flushRankCallDatabaseWrites();
+  if (dbReady && voiceHoursBackupReady) {
+    try {
+      await persistVoiceHoursBackupSnapshot('shutdown');
+    } catch (error) {
+      console.error('[RankCall] Não foi possível salvar o backup PostgreSQL ao encerrar:', error.message);
+    }
+  }
+  if (db) await db.end();
 }
 
-process.on('SIGINT', async () => {
+async function shutdownProcess(signal) {
+  const timeout = setTimeout(() => {
+    console.error(`[Shutdown] Tempo limite ao encerrar após ${signal}; finalizando sem mais espera.`);
+    process.exit(1);
+  }, 15000);
+  timeout.unref();
   try {
     await persistRankCallStateOnShutdown();
-  } finally {
+    client.destroy();
     process.exit(0);
+  } catch (error) {
+    console.error(`[Shutdown] Erro durante encerramento (${signal}):`, error);
+    process.exit(1);
+  } finally {
+    clearTimeout(timeout);
   }
-});
+}
 
-process.on('SIGTERM', async () => {
-  try {
-    await persistRankCallStateOnShutdown();
-  } finally {
-    process.exit(0);
-  }
-});
+process.on('SIGINT', () => void shutdownProcess('SIGINT'));
+process.on('SIGTERM', () => void shutdownProcess('SIGTERM'));
 
 client.login(token);
