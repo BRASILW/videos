@@ -81,6 +81,7 @@ const {
 } = require('@discordjs/voice');
 
 const { MusicController } = require('./music');
+const { deleteBotMessagesFromDM } = require('./dm-cleanup');
 const {
   downloadPack,
   summarizeUploadResults,
@@ -1157,6 +1158,8 @@ let statsDashboardTimer = null;
 const statsDashboardRefreshInProgress = new Set();
 const statsDashboardOwner = `${process.pid}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
 let lastDailyDashboardMaintenanceDate = '';
+const dmCleanupInProgress = new Set();
+let dmCleanupTimer = null;
 
 const STATS_DASHBOARD_BANNER =
   'https://cdn.discordapp.com/attachments/1551958147252490320/1555244531333726289/9ed7e3a2bde57597d28d42fe22510cf1.gif?backend=b2&ex=6abfd1d7&is=6abe8057&hm=43982236a968e1357f8bf523d99985814edf76c7cc1e4436a1f37b0c54235e1f&';
@@ -2014,18 +2017,6 @@ function addRankCallDailySecondsForInterval(guildId, userId, startMs, endMs) {
   return changed;
 }
 
-async function notifyRankCallStreakBroken(guildId, userId, missedDate, oldStreak) {
-  if (oldStreak <= 0) return;
-  try {
-    const user = await client.users.fetch(userId);
-    const guild = client.guilds.cache.get(guildId);
-    const prettyDate = new Intl.DateTimeFormat('pt-BR', { timeZone: RANK_CALL_TIMEZONE, day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(`${missedDate}T12:00:00.000Z`));
-    await user.send(`${RANK_CALL_STREAK_EMOJI} **Sua sequncia do RankCall foi perdida.**\n\nVocê tinha uma sequncia de **${oldStreak} ${oldStreak === 1 ? 'dia' : 'dias'}**${guild ? ` no servidor **${guild.name}**` : ''}.\nNo dia **${prettyDate}**, você não completou os **30 minutos mínimos em call**.\n\nEntre em qualquer canal de voz e fique pelo menos **30 minutos** no dia para começar uma nova sequncia.`);
-  } catch (error) {
-    console.warn('[RankCall] Não foi possível enviar DM de sequncia:', error.message);
-  }
-}
-
 async function evaluateRankCallStreaks(now = Date.now()) {
   const today = getRankCallDateKey(now);
   const yesterday = shiftRankCallDate(today, -1);
@@ -2044,11 +2035,9 @@ async function evaluateRankCallStreaks(now = Date.now()) {
     // Se ontem não foi cumprido, a sequncia atual  quebrada.
     // Isso não impede que uma nova sequncia seja iniciada hoje aps 30 min.
     if (Number(record.currentStreak) > 0 && !yesterdayQualified && record.missedDayNotified !== yesterday) {
-      const oldStreak = Number(record.currentStreak) || 0;
       record.currentStreak = 0;
       record.missedDayNotified = yesterday;
       changed = true;
-      await notifyRankCallStreakBroken(guildId, userId, yesterday, oldStreak);
     }
 
     // Ao atingir 30 min hoje, a data de hoje precisa estar qualificada.
@@ -13583,6 +13572,7 @@ client.once(
 
 
     await initDB();
+    startDirectMessageCleanup();
     await restoreStatsDashboardPanels();
     startStatsDashboardRefresh();
     await loadBotPresenceFromDatabase();
@@ -13798,6 +13788,34 @@ client.on(Events.GuildMemberRemove, async member => {
   if (!await claimDiscordEvent('member-leave', `${member.guild.id}:${member.id}:${joinedAt}`)) return;
   await recordDailyGuildStats(member.guild.id, { leaves: 1 });
 });
+
+async function cleanDirectMessageChannel(channel, allHistory = false) {
+  if (!client.user?.id || !channel?.isDMBased?.() || dmCleanupInProgress.has(channel.id)) return;
+  dmCleanupInProgress.add(channel.id);
+  try {
+    const result = await deleteBotMessagesFromDM(channel, client.user.id, { allHistory });
+    if (result.deleted || result.failed) {
+      console.log(`[DM Cleanup] ${channel.id}: removidas ${result.deleted} mensagem(ns) do bot; falhas=${result.failed}.`);
+    }
+  } catch (error) {
+    console.error(`[DM Cleanup] Falha ao limpar o PV ${channel.id}:`, error.message);
+  } finally {
+    dmCleanupInProgress.delete(channel.id);
+  }
+}
+
+function startDirectMessageCleanup() {
+  for (const channel of client.channels.cache.values()) {
+    if (channel.isDMBased()) void cleanDirectMessageChannel(channel, true);
+  }
+
+  if (dmCleanupTimer) clearInterval(dmCleanupTimer);
+  dmCleanupTimer = setInterval(() => {
+    for (const channel of client.channels.cache.values()) {
+      if (channel.isDMBased()) void cleanDirectMessageChannel(channel);
+    }
+  }, 60 * 1000);
+}
 
 
 
@@ -14739,6 +14757,7 @@ client.on(
       if (!message.guild) {
         if (message.author?.bot) return;
         if (!await claimDiscordEvent('message', message.id)) return;
+        await cleanDirectMessageChannel(message.channel, true);
         await forwardIncomingDmToLog(message);
         return;
       }
