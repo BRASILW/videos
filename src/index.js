@@ -94,6 +94,10 @@ const {
   summarizeUploadResults,
   uploadPack
 } = require('./pack-upload');
+const {
+  commands: influencerCommands,
+  createInfluencerFeature
+} = require('./influencers');
 
 
 
@@ -2347,10 +2351,114 @@ async function performVoiceSessionCheckpoint() {
 }
 
 let voiceConnection = null;
+let voiceReconnectTimer = null;
+let voiceReconnectAttempt = 0;
+let activeVoiceTarget = null;
+
+function scheduleVoiceReconnect() {
+  if (!activeVoiceTarget || voiceReconnectTimer) return;
+  const delay = Math.min(5_000 * (2 ** voiceReconnectAttempt), 60_000);
+  voiceReconnectAttempt += 1;
+  voiceReconnectTimer = setTimeout(async () => {
+    voiceReconnectTimer = null;
+    const target = activeVoiceTarget;
+    try {
+      if (!target) return;
+      const guild = client.guilds.cache.get(target.guildId) ||
+        await client.guilds.fetch(target.guildId);
+      const channel = await guild.channels.fetch(target.channelId);
+      if (!channel || ![
+        ChannelType.GuildVoice,
+        ChannelType.GuildStageVoice
+      ].includes(channel.type)) {
+        throw new Error(`O canal de voz ${target.channelId} não está disponível.`);
+      }
+      if (activeVoiceTarget !== target) return;
+      await openVoiceConnection(guild, channel);
+      voiceReconnectAttempt = 0;
+    } catch (error) {
+      console.warn('[Voice] Não foi possível voltar à call:', error.message);
+      scheduleVoiceReconnect();
+    }
+  }, delay);
+  voiceReconnectTimer.unref();
+}
+
+async function openVoiceConnection(guild, channel) {
+  let connection;
+  try {
+    connection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: guild.id,
+      adapterCreator: guild.voiceAdapterCreator,
+      selfDeaf: false
+    });
+    voiceConnection = connection;
+    connection.on('error', error => {
+      if (voiceConnection !== connection) return;
+      console.warn('[Voice] Erro na conexão de voz:', error?.message || error);
+      voiceConnection = null;
+      connection.destroy();
+      scheduleVoiceReconnect();
+    });
+    connection.on(VoiceConnectionStatus.Disconnected, () => {
+      entersState(connection, VoiceConnectionStatus.Ready, 5_000).catch(error => {
+        if (voiceConnection !== connection || !activeVoiceTarget) return;
+        console.warn('[Voice] Desconectado da call; tentando reconectar:', error.message);
+        voiceConnection = null;
+        connection.destroy();
+        scheduleVoiceReconnect();
+      });
+    });
+    await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
+    console.log(`[Voice] Conectado em ${channel.name}`);
+  } catch (error) {
+    if (voiceConnection === connection) {
+      voiceConnection = null;
+      connection.destroy();
+    }
+    throw error;
+  }
+}
+
+async function connectToVoiceChannel(guild, channel) {
+  activeVoiceTarget = { guildId: guild.id, channelId: channel.id };
+  voiceReconnectAttempt = 0;
+  if (voiceReconnectTimer) {
+    clearTimeout(voiceReconnectTimer);
+    voiceReconnectTimer = null;
+  }
+  if (voiceConnection) {
+    const previousConnection = voiceConnection;
+    voiceConnection = null;
+    previousConnection.destroy();
+  }
+  try {
+    await openVoiceConnection(guild, channel);
+  } catch (error) {
+    scheduleVoiceReconnect();
+    throw error;
+  }
+}
+
+function stopVoiceConnection() {
+  activeVoiceTarget = null;
+  voiceReconnectAttempt = 0;
+  if (voiceReconnectTimer) {
+    clearTimeout(voiceReconnectTimer);
+    voiceReconnectTimer = null;
+  }
+  if (voiceConnection) {
+    const previousConnection = voiceConnection;
+    voiceConnection = null;
+    previousConnection.destroy();
+  }
+}
 
 
 
 let db = null;
+let influencerFeature = null;
 
 let dbReady = false;
 let voiceHoursBackupReady = false;
@@ -4287,6 +4395,10 @@ async function handleHelpPrefixCommand(message) {
       {
         name: 'Perfil e packs',
         value: '`!botstatus <status> <atividade> [texto]` altera a presença do bot; `!packimport` com um ZIP anexado importa emojis e figurinhas. Status exige Gerenciar Servidor; packs exigem Criar/Gerenciar Expressões.'
+      },
+      {
+        name: 'Influenciadores',
+        value: '`!painel` publica o painel de vídeos. Use `/configurar-painel` para editar o conteúdo, as imagens, a cor dos botões e o canal de publicações.'
       },
       {
         name: 'Moderação',
@@ -11473,6 +11585,8 @@ async function registerCommands() {
 
   const commands = [
 
+    ...influencerCommands,
+
     new SlashCommandBuilder()
       .setName('play')
       .setDescription('Toca uma música ou adiciona uma busca à fila.')
@@ -13833,6 +13947,13 @@ client.once(
 
 
     await initDB();
+    influencerFeature = createInfluencerFeature({
+      client,
+      getDb: () => db,
+      configRoleId: process.env.INFLUENCER_CONFIG_ROLE_ID || COMMAND_ACCESS_ROLE_ID,
+      postChannelId: process.env.POST_CHANNEL_ID
+    });
+    await influencerFeature.init();
     await loadRankCallConfigFromDatabase();
     startDirectMessageCleanup();
     await restoreStatsDashboardPanels();
@@ -13916,71 +14037,7 @@ client.once(
 
         try {
 
-          voiceConnection =
-
-            joinVoiceChannel({
-
-              channelId:
-
-                voice.id,
-
-              guildId:
-
-                guild.id,
-
-              adapterCreator:
-
-                guild.voiceAdapterCreator,
-
-              selfDeaf: false
-
-            });
-
-          voiceConnection.on('error', (error) => {
-            console.warn('[Voice] Erro na conexo de voz:', error?.message || error);
-            try { voiceConnection?.destroy(); } catch {}
-            voiceConnection = null;
-          });
-
-
-
-          voiceConnection.on(
-
-            VoiceConnectionStatus.Disconnected,
-
-            async () => {
-
-              try {
-
-                await entersState(
-
-                  voiceConnection,
-
-                  VoiceConnectionStatus.Signalling,
-
-                  5000
-
-                );
-
-              } catch {
-
-                voiceConnection =
-
-                  null;
-
-              }
-
-            }
-
-          );
-
-
-
-          console.log(
-
-            `[Voice] Conectado em ${voice.name}`
-
-          );
+          await connectToVoiceChannel(guild, voice);
 
         } catch (e) {
 
@@ -14484,15 +14541,17 @@ client.on(
     try {
       if (!await claimDiscordEvent('interaction', interaction.id)) return;
 
+      if (interaction.isChatInputCommand() && interaction.guild) {
+        await recordDailyGuildStats(interaction.guild.id, { commands: 1 });
+      }
+
+      if (await influencerFeature?.handleInteraction(interaction)) return;
+
       if (
 
         interaction.isChatInputCommand()
 
       ) {
-        if (interaction.guild) {
-          await recordDailyGuildStats(interaction.guild.id, { commands: 1 });
-        }
-
         await handleSlashCommand(
 
           interaction
@@ -15441,6 +15500,10 @@ client.on(
         commands: dailyCommand ? 1 : 0
       });
 
+      if (await influencerFeature?.handleMessage(message)) {
+        return;
+      }
+
       if (await handleAfkPrefixCommand(message)) {
         return;
       }
@@ -15724,47 +15787,7 @@ client.on(
 
           try {
 
-            if (
-
-              voiceConnection
-
-            ) {
-
-              voiceConnection.destroy();
-
-            }
-
-
-
-            voiceConnection =
-
-              joinVoiceChannel({
-
-                channelId:
-
-                  channel.id,
-
-                guildId:
-
-                  message.guild.id,
-
-                adapterCreator:
-
-                  message.guild
-
-                    .voiceAdapterCreator,
-
-                selfDeaf: false
-
-              });
-
-            voiceConnection.on('error', (error) => {
-              console.warn('[Voice] Erro na conexo de voz:', error?.message || error);
-              try { voiceConnection?.destroy(); } catch {}
-              voiceConnection = null;
-            });
-
-
+            await connectToVoiceChannel(message.guild, channel);
 
             await message.reply(
 
@@ -15809,29 +15832,8 @@ client.on(
 
       ) {
 
-        if (
-
-          voiceConnection
-
-        ) {
-
-          voiceConnection.destroy();
-
-          voiceConnection =
-
-            null;
-
-
-
-          await message.reply(
-
-            '👋 Saí da call.'
-
-          );
-
-        }
-
-
+        stopVoiceConnection();
+        await message.reply('👋 Saí da call.');
 
         return;
 

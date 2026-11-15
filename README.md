@@ -23,9 +23,17 @@ Nunca compartilhe o token e nunca o envie para o Git.
 
 ## Funcoes
 
-Comandos slash disponiveis: `/ping`, `/dashboard`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close`, `/role`, `/botstatus` e `/packimport`.
+Comandos slash disponiveis: `/ping`, `/dashboard`, `/clear`, `/kick`, `/mute`, `/ban`, `/poll`, `/ticket`, `/close`, `/role`, `/botstatus`, `/packimport`, `/painel` e `/configurar-painel`.
 
-Comandos slash de musica: `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/volume` e `/shuffle`. Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!stats`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban`, `!play`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume`, `!shuffle` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
+Comandos slash de musica: `/play`, `/pause`, `/resume`, `/skip`, `/stop`, `/queue`, `/volume` e `/shuffle`. Comandos de texto com prefixo `!`: `!help`, `!ping`, `!oi`, `!stats`, `!dm`, `!horascall`, `!call`, `!entrar`, `!sair`, `!priv`, `!regras2`, `!match`, `!metch`, `!clear`, `!kick`, `!mute`, `!ban`, `!painel`, `!play`, `!pause`, `!resume`, `!skip`, `!stop`, `!queue`, `!volume`, `!shuffle` e os comandos `!rank...`. Nos comandos que recebem um usuario, use uma mencao ou o ID numerico do Discord.
+
+## Painel de influenciadores
+
+Administradores podem usar `/painel` ou `!painel` para publicar o painel de vídeos. O comando `/configurar-painel` permite a membros com `INFLUENCER_CONFIG_ROLE_ID` (ou com **Gerenciar Servidor**) editar o conteúdo, imagens, cor dos botões e canal de publicações. Se `POST_CHANNEL_ID` não estiver definido, escolha o canal pelo painel de configuração. O bot aceita vídeos MP4, MOV, WEBM e M4V, links opcionais de TikTok e Instagram, curtidas e comentários.
+
+As publicações, curtidas, comentários e configurações usam o PostgreSQL do bot. No Render, configure `DATABASE_URL` com a **Internal Database URL** do serviço `videos-postgres`; sem banco disponível, o painel informa que não pode ser usado. `INFLUENCER_CONFIG_ROLE_ID` e `POST_CHANNEL_ID` são opcionais.
+
+O bot tenta voltar automaticamente à call configurada em `VOICE_CHANNEL_ID` após uma desconexão, com novas tentativas espaçadas. `!entrar` define a call para reconexão; `!sair` sai intencionalmente e desativa a reconexão até o bot reiniciar.
 
 Administradores ou membros com **Gerenciar Servidor** podem usar `!stats` ou `/dashboard` em um canal de texto para criar ou mover o painel persistente daquele servidor. Ele exibe membros, pessoas em calls com menções, horas de voz, mensagens, comandos e crescimento líquido do dia; atualiza a cada 5 segundos e usa o banner configurado. As métricas diárias mudam automaticamente à meia-noite no fuso do RankCall (`RANK_CALL_TIMEZONE`). Contagens de mensagens/comandos/entradas/saídas começam quando esta versão é implantada. O canal e a mensagem do painel, assim como os contadores diários e a deduplicação de eventos entre instâncias, usam PostgreSQL quando `DATABASE_URL` está configurada; sem banco, o painel e os contadores ficam apenas na memória do processo. O comando `!stats` deve ser executado no canal onde você quer o painel.
 
