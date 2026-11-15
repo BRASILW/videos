@@ -530,7 +530,7 @@ async function expireTimedMutes() {
       if (legacyTimeout) {
         await member.timeout(null, "Mute temporário expirado");
       }
-      if (currentMute.role_added_by_bot && member.roles.cache.has(currentMute.role_id)) {
+      if (member.roles.cache.has(currentMute.role_id)) {
         await member.roles.remove(currentMute.role_id, "Mute temporário expirado");
       }
       const deletion = db.prepare(

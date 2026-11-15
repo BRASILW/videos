@@ -40,6 +40,7 @@
 - Para bloquear mensagens, configure o cargo de mute para negar **Send Messages** e **Send Messages in Threads** nos canais de texto. Nos canais de voz, negue **Speak**, mas não **Connect**, para a pessoa permanecer na call.
 - O bot precisa das permissões **Mute Members** e **Manage Roles**. O cargo do bot deve ficar acima do cargo de mute e dos membros moderados; o cargo de mute e o canal de registro precisam existir e estar acessíveis.
 - Se a pessoa tiver as DMs fechadas, o bot avisa o moderador que não conseguiu enviar a mensagem; o mute permanece aplicado.
+- Ao vencer o tempo ou usar `/unmute`, o bot remove o cargo `1571368553926369361`, mesmo se a pessoa já o tinha antes do `/mute`.
 - A remoção automática do cargo e do mute de voz é persistida em SQLite. Em hospedagens sem disco persistente, um reinício pode perder essa agenda.
 
 ## Deploy no Render
