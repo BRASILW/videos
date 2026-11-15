@@ -10,7 +10,7 @@
 - Botões para curtir/descurtir, comentar e ver os 10 comentários mais recentes.
 - Curtidas e comentários ficam salvos em SQLite (`influenciadores.sqlite`).
 - O bot entra na call `1571359738682286161` sem áudio quando inicia.
-- `/mute` aplica timeout de chat e voz e o cargo `1571368553926369361`; `/unmute` remove o mute.
+- `/mute` silencia um membro no chat e na voz sem desconectá-lo, envia o motivo por DM e aplica o cargo `1571368553926369361`; `/unmute` remove o mute.
 - `!emj emoji nome` ou `!emj figurinha nome tag` adiciona um arquivo anexado ao servidor (somente conteúdo próprio ou autorizado; requer **Gerenciar expressões**).
 
 ## Instalação
@@ -19,7 +19,7 @@
 3. Crie um arquivo `.env` na pasta do projeto e preencha `DISCORD_TOKEN` e `GUILD_ID`. `POST_CHANNEL_ID` é opcional. O ID do aplicativo é obtido automaticamente do bot autenticado. Use somente um token recém-gerado; nunca compartilhe ou versione o arquivo `.env`.
 4. No Discord Developer Portal, ative **Message Content Intent** em Bot > Privileged Gateway Intents.
 5. Convide o bot com os escopos `bot` e `applications.commands`.
-6. Permissões recomendadas: View Channels, Send Messages, Embed Links, Attach Files, Read Message History. Para `!emj`, o usuário e o bot também precisam de **Manage Expressions**.
+6. Permissões recomendadas: View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Connect, Mute Members e Manage Roles. Para `!emj`, o usuário e o bot também precisam de **Manage Expressions**.
 7. No terminal, dentro da pasta, execute:
    ```bash
    npm install
@@ -35,11 +35,11 @@
 - O destaque dos cartões de publicação e a cor padrão do painel são pretos.
 
 ## Moderação
-- Moderadores com a permissão **Moderate Members** podem usar `/mute membro tempo motivo` e `/unmute membro motivo`.
-- O membro pode ser selecionado pela lista do Discord. A duração aceita horas ou dias, por exemplo `1h` ou `2d`, até o limite de 28 dias do timeout nativo.
-- O mute bloqueia mensagens e voz pelo timeout do Discord, aplica o cargo `1571368553926369361` e registra o motivo e vencimento no canal `1571282224660357182`.
-- O bot precisa das permissões **Moderate Members** e **Manage Roles**. O cargo do bot deve ficar acima do cargo de mute e dos membros moderados; o cargo de mute e o canal de registro também precisam existir e estar acessíveis.
-- A remoção automática do cargo é persistida em SQLite. Em hospedagens sem disco persistente, um reinício pode perder essa agenda; o timeout nativo ainda expira no Discord.
+- Moderadores com a permissão **Moderate Members** podem usar `/mute membro tempo motivo` e `/unmute membro motivo`. A duração aceita horas ou dias, como `1h` ou `2d`, até 28 dias.
+- O bot silencia a voz sem desconectar a pessoa, aplica o cargo `1571368553926369361`, envia o motivo e o vencimento por DM e registra a ação no canal `1571282224660357182`.
+- Para bloquear mensagens, configure o cargo de mute para negar **Send Messages** e **Send Messages in Threads** nos canais de texto. Nos canais de voz, negue **Speak**, mas não **Connect**, para a pessoa permanecer na call.
+- O bot precisa das permissões **Mute Members** e **Manage Roles**. O cargo do bot deve ficar acima do cargo de mute e dos membros moderados; o cargo de mute e o canal de registro precisam existir e estar acessíveis.
+- A remoção automática do cargo e do mute de voz é persistida em SQLite. Em hospedagens sem disco persistente, um reinício pode perder essa agenda.
 
 ## Deploy no Render
 Este bot fica isolado em `influenciadores-bot/` para não substituir o aplicativo já existente na raiz do repositório `BRASILW/videos`. Para usar o plano gratuito, crie um **Web Service** ligado à branch do bot e configure **Root Directory** como `influenciadores-bot`, `npm install` como Build Command e `npm start` como Start Command. Selecione o plano **Free** e defina `DISCORD_TOKEN` e `GUILD_ID` nas variáveis de ambiente do Render. O ID do aplicativo é obtido automaticamente do bot autenticado. `POST_CHANNEL_ID` é opcional.

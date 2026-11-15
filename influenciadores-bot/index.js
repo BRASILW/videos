@@ -81,9 +81,15 @@ db.exec(`
     moderator_id TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
     role_added_by_bot INTEGER NOT NULL,
+    voice_mute_added_by_bot INTEGER,
     PRIMARY KEY (guild_id, user_id)
   );
 `);
+
+const activeMuteColumns = db.pragma("table_info(active_mutes)");
+if (!activeMuteColumns.some(column => column.name === "voice_mute_added_by_bot")) {
+  db.exec("ALTER TABLE active_mutes ADD COLUMN voice_mute_added_by_bot INTEGER");
+}
 
 const postColumns = db.pragma("table_info(posts)");
 if (!postColumns.some(column => column.name === "discord_nick")) {
@@ -121,7 +127,7 @@ const commands = [
     .setDescription("Abre as configurações do painel"),
   new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Silencia um membro temporariamente no chat e na voz")
+    .setDescription("Silencia um membro temporariamente sem removê-lo da call")
     .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
     .addStringOption(option => option
       .setName("membro")
@@ -198,6 +204,19 @@ function createMuteLogEmbed({ guild, title, userId, moderatorId, reason, duratio
   return embed;
 }
 
+function createMuteDmEmbed({ guild, reason, duration, expiresAt }) {
+  return new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle("Você recebeu um silenciamento temporário")
+    .setDescription(`Seu acesso foi silenciado no servidor **${guild.name}**. Você permanece na call, mas não poderá falar enquanto o mute estiver ativo.`)
+    .addFields(
+      { name: "Motivo", value: reason },
+      { name: "Duração", value: duration },
+      { name: "Vencimento", value: `<t:${Math.floor(expiresAt / 1000)}:F> • <t:${Math.floor(expiresAt / 1000)}:R>` }
+    )
+    .setTimestamp();
+}
+
 async function sendMuteLog(guild, embed) {
   const channel = await guild.channels.fetch(muteLogChannelId);
   if (!channel?.isTextBased()) {
@@ -212,8 +231,8 @@ async function getMuteRoleAndBotMember(guild) {
     guild.members.fetchMe()
   ]);
   if (!role) throw new Error(`O cargo de mute ${muteRoleId} não existe neste servidor.`);
-  if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
-    throw new Error("O bot precisa da permissão Moderar Membros.");
+  if (!botMember.permissions.has(PermissionFlagsBits.MuteMembers)) {
+    throw new Error("O bot precisa da permissão Silenciar Membros.");
   }
   if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
     throw new Error("O bot precisa da permissão Gerenciar Cargos.");
@@ -270,37 +289,50 @@ async function handleMuteCommand(interaction) {
 
     const now = Date.now();
     const expiresAt = now + duration.milliseconds;
-    const previousTimeout = target.communicationDisabledUntilTimestamp;
-    if (previousTimeout && previousTimeout > expiresAt) {
-      return interaction.editReply("Esse membro já tem um timeout que termina depois do prazo informado.");
-    }
-
     const existingMute = db.prepare(
-      "SELECT role_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+      "SELECT role_added_by_bot, voice_mute_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
     ).get(guild.id, target.id);
     const hadMuteRole = target.roles.cache.has(role.id);
     const roleAddedByBot = existingMute
       ? Boolean(existingMute.role_added_by_bot)
       : !hadMuteRole;
-    let timeoutApplied = false;
+    const hadServerMute = target.voice.serverMute;
+    const previousTimeout = existingMute && existingMute.voice_mute_added_by_bot === null
+      ? target.communicationDisabledUntilTimestamp
+      : null;
+    const shouldTrackServerMute = Boolean(target.voice.channelId &&
+      (!hadServerMute || (previousTimeout && previousTimeout > Date.now())));
+    const voiceMuteAddedByBot = existingMute
+      ? Boolean(existingMute.voice_mute_added_by_bot) ||
+        (!existingMute.voice_mute_added_by_bot && shouldTrackServerMute)
+      : Boolean(target.voice.channelId && !hadServerMute);
+    let voiceMuteApplied = false;
+    let legacyTimeoutCleared = false;
     let roleAdded = false;
 
     try {
-      await target.timeout(duration.milliseconds, reason);
-      timeoutApplied = true;
+      if (!hadServerMute && target.voice.channelId) {
+        await target.voice.setMute(true, reason);
+        voiceMuteApplied = true;
+      }
+      if (previousTimeout && previousTimeout > Date.now()) {
+        await target.timeout(null, "Convertendo mute temporário legado");
+        legacyTimeoutCleared = true;
+      }
       if (!hadMuteRole) {
         await target.roles.add(role, reason);
         roleAdded = true;
       }
       db.prepare(`
-        INSERT INTO active_mutes (guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO active_mutes (guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot, voice_mute_added_by_bot)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(guild_id, user_id) DO UPDATE SET
           role_id = excluded.role_id,
           reason = excluded.reason,
           moderator_id = excluded.moderator_id,
           expires_at = excluded.expires_at,
-          role_added_by_bot = excluded.role_added_by_bot
+          role_added_by_bot = excluded.role_added_by_bot,
+          voice_mute_added_by_bot = excluded.voice_mute_added_by_bot
       `).run(
         guild.id,
         target.id,
@@ -308,42 +340,58 @@ async function handleMuteCommand(interaction) {
         reason,
         moderator.id,
         expiresAt,
-        roleAddedByBot ? 1 : 0
+        roleAddedByBot ? 1 : 0,
+        voiceMuteAddedByBot ? 1 : 0
       );
     } catch (error) {
       if (roleAdded) {
         await target.roles.remove(role, "Revertendo mute incompleto")
           .catch(rollbackError => console.error("Falha ao reverter o cargo de mute:", rollbackError));
       }
-      if (timeoutApplied) {
-        const remainingTimeout = previousTimeout && previousTimeout > Date.now()
-          ? previousTimeout - Date.now()
-          : null;
-        await target.timeout(remainingTimeout, "Revertendo mute incompleto")
-          .catch(rollbackError => console.error("Falha ao reverter o timeout:", rollbackError));
+      if (voiceMuteApplied) {
+        await target.voice.setMute(false, "Revertendo mute incompleto")
+          .catch(rollbackError => console.error("Falha ao reverter o mute de voz:", rollbackError));
+      }
+      if (legacyTimeoutCleared && previousTimeout > Date.now()) {
+        await target.timeout(previousTimeout - Date.now(), "Revertendo conversão de mute")
+          .catch(rollbackError => console.error("Falha ao restaurar o timeout legado:", rollbackError));
       }
       throw error;
     }
 
     const logEmbed = createMuteLogEmbed({
       guild,
-      title: "🔇 Membro mutado em canais de texto e voz",
+      title: "🔇 Membro silenciado sem desconectar da call",
       userId: target.id,
       moderatorId: moderator.id,
       reason,
       duration: duration.label,
       expiresAt
     });
-    let logWarning = "";
+    const warnings = [];
     try {
       await sendMuteLog(guild, logEmbed);
     } catch (error) {
       console.error("Mute aplicado, mas não foi possível enviar o registro:", error);
-      logWarning = " Não consegui enviar o registro; confira o acesso do bot ao canal de logs.";
+      warnings.push("Não consegui enviar o registro; confira o acesso do bot ao canal de logs.");
+    }
+    try {
+      await target.send({
+        embeds: [createMuteDmEmbed({
+          guild,
+          reason,
+          duration: duration.label,
+          expiresAt
+        })],
+        allowedMentions: { parse: [] }
+      });
+    } catch (error) {
+      console.error("Mute aplicado, mas não foi possível enviar o motivo por DM:", error);
+      warnings.push("Não consegui enviar o PV da pessoa; ela pode estar com as DMs fechadas.");
     }
 
     return interaction.editReply(
-      `🔇 <@${target.id}> foi silenciado por ${duration.label}. Motivo: ${reason}.${logWarning}`
+      `🔇 <@${target.id}> foi silenciado por ${duration.label} e permanece na call. Motivo: ${reason}.${warnings.length ? ` ${warnings.join(" ")}` : ""}`
     );
   } catch (error) {
     console.error("Não foi possível aplicar o mute:", error);
@@ -378,25 +426,35 @@ async function handleUnmuteCommand(interaction) {
     }
 
     const muteRecord = db.prepare(
-      "SELECT expires_at FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+      "SELECT expires_at, voice_mute_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
     ).get(guild.id, target.id);
-    const previousTimeout = target.communicationDisabledUntilTimestamp;
-    const hasTimeout = previousTimeout && previousTimeout > Date.now();
+    const hasServerMute = target.voice.serverMute;
     const hadMuteRole = target.roles.cache.has(role.id);
-    if (!hasTimeout && !hadMuteRole && !muteRecord) {
+    if (!hasServerMute && !hadMuteRole && !muteRecord) {
       return interaction.editReply("Esse membro não tem um mute ativo.");
     }
 
     let roleRemoved = false;
-    let timeoutCleared = false;
+    let voiceMuteCleared = false;
+    let legacyTimeoutCleared = false;
+    const previousTimeout = muteRecord && muteRecord.voice_mute_added_by_bot === null
+      ? target.communicationDisabledUntilTimestamp
+      : null;
+    const hasLegacyTimeout = Boolean(previousTimeout && previousTimeout > Date.now());
     try {
       if (hadMuteRole) {
         await target.roles.remove(role, reason);
         roleRemoved = true;
       }
-      if (hasTimeout) {
+      const shouldClearServerMute = hasServerMute &&
+        (!muteRecord || Boolean(muteRecord.voice_mute_added_by_bot) || hasLegacyTimeout);
+      if (shouldClearServerMute) {
+        await target.voice.setMute(false, reason);
+        voiceMuteCleared = true;
+      }
+      if (hasLegacyTimeout) {
         await target.timeout(null, reason);
-        timeoutCleared = true;
+        legacyTimeoutCleared = true;
       }
       db.prepare("DELETE FROM active_mutes WHERE guild_id = ? AND user_id = ?")
         .run(guild.id, target.id);
@@ -405,9 +463,13 @@ async function handleUnmuteCommand(interaction) {
         await target.roles.add(role, "Revertendo unmute incompleto")
           .catch(rollbackError => console.error("Falha ao restaurar o cargo de mute:", rollbackError));
       }
-      if (timeoutCleared && previousTimeout > Date.now()) {
+      if (voiceMuteCleared) {
+        await target.voice.setMute(true, "Revertendo unmute incompleto")
+          .catch(rollbackError => console.error("Falha ao restaurar o mute de voz:", rollbackError));
+      }
+      if (legacyTimeoutCleared && previousTimeout > Date.now()) {
         await target.timeout(previousTimeout - Date.now(), "Revertendo unmute incompleto")
-          .catch(rollbackError => console.error("Falha ao restaurar o timeout:", rollbackError));
+          .catch(rollbackError => console.error("Falha ao restaurar o timeout legado:", rollbackError));
       }
       throw error;
     }
@@ -437,13 +499,13 @@ async function handleUnmuteCommand(interaction) {
 
 async function expireTimedMutes() {
   const expiredMutes = db.prepare(
-    "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot FROM active_mutes WHERE expires_at <= ?"
+    "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot, voice_mute_added_by_bot FROM active_mutes WHERE expires_at <= ?"
   ).all(Date.now());
 
   for (const expiredMute of expiredMutes) {
     try {
       const currentMute = db.prepare(
-        "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+        "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot, voice_mute_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
       ).get(expiredMute.guild_id, expiredMute.user_id);
       if (!currentMute || currentMute.expires_at > Date.now()) continue;
 
@@ -460,6 +522,14 @@ async function expireTimedMutes() {
         throw error;
       }
 
+      const legacyTimeout = currentMute.voice_mute_added_by_bot === null &&
+        member.communicationDisabledUntilTimestamp > Date.now();
+      if ((currentMute.voice_mute_added_by_bot || legacyTimeout) && member.voice.serverMute) {
+        await member.voice.setMute(false, "Mute temporário expirado");
+      }
+      if (legacyTimeout) {
+        await member.timeout(null, "Mute temporário expirado");
+      }
       if (currentMute.role_added_by_bot && member.roles.cache.has(currentMute.role_id)) {
         await member.roles.remove(currentMute.role_id, "Mute temporário expirado");
       }
