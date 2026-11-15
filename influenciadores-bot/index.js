@@ -9,6 +9,7 @@ const {
   TextDisplayBuilder, StringSelectMenuBuilder, MessageFlags, PermissionFlagsBits
 } = require("discord.js");
 const Database = require("better-sqlite3");
+const http = require("node:http");
 
 const required = ["DISCORD_TOKEN", "CLIENT_ID", "GUILD_ID"];
 for (const key of required) {
@@ -1069,4 +1070,27 @@ client.on("messageCreate", async message => {
 
 });
 
-client.login(process.env.DISCORD_TOKEN);
+if (process.env.PORT) {
+  const healthServer = http.createServer((request, response) => {
+    if (request.url === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({
+        status: "ok",
+        discord: client.isReady() ? "ready" : "connecting"
+      }));
+      return;
+    }
+
+    response.writeHead(404);
+    response.end();
+  });
+
+  healthServer.listen(Number(process.env.PORT), "0.0.0.0", () => {
+    console.log(`Health endpoint listening on port ${process.env.PORT}`);
+  });
+}
+
+client.login(process.env.DISCORD_TOKEN).catch((error) => {
+  console.error("Discord login failed:", error);
+  process.exit(1);
+});

@@ -33,13 +33,9 @@
 - O destaque dos cartões de publicação e a cor padrão do painel são pretos.
 
 ## Deploy no Render
-Este bot fica isolado em `influenciadores-bot/` para não substituir o aplicativo já existente na raiz do repositório `BRASILW/videos`. Depois de integrar esta pasta à branch desejada:
-1. Crie um **Background Worker** ligado ao repositório `BRASILW/videos` e defina **Root Directory** como `influenciadores-bot`.
-2. Use `npm install` como Build Command e `npm start` como Start Command.
-3. Configure `DISCORD_TOKEN`, `CLIENT_ID`, `GUILD_ID` e `DATABASE_PATH=/var/data/influenciadores.sqlite`. `POST_CHANNEL_ID` é opcional.
-4. Adicione um disco persistente de 1 GB montado em `/var/data`, para o SQLite não ser perdido em reinicializações.
+Este bot fica isolado em `influenciadores-bot/` para não substituir o aplicativo já existente na raiz do repositório `BRASILW/videos`. Para usar o plano gratuito, crie um **Web Service** ligado à branch do bot e configure **Root Directory** como `influenciadores-bot`, `npm install` como Build Command e `npm start` como Start Command. Selecione o plano **Free** e defina `DISCORD_TOKEN`, `CLIENT_ID` e `GUILD_ID` nas variáveis de ambiente do Render. `POST_CHANNEL_ID` é opcional.
 
-Nunca salve tokens em arquivos do repositório. Como o token anterior foi exposto, revogue-o no Discord Developer Portal e gere um novo antes de iniciar o serviço.
+O serviço expõe `/health` para o Render. O plano gratuito não mantém o bot sempre online: ele pode dormir após 15 minutos sem tráfego HTTP, e o banco SQLite local pode ser perdido quando o serviço reinicia ou dorme. Não use esta configuração se precisar de disponibilidade contínua ou preservar curtidas e comentários. Nunca salve tokens em arquivos do repositório. Como o token anterior foi exposto, revogue-o no Discord Developer Portal e gere um novo.
 
 ## Importante
 - O formulário do Discord coleta os links e o vídeo de uma vez; use MP4, MOV, WEBM ou M4V.
