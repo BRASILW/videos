@@ -90,6 +90,7 @@ const {
 const { MusicController } = require('./music');
 const { deleteBotMessagesFromDM } = require('./dm-cleanup');
 const { shouldAnalyzeAIAttention } = require('./ai-attention-cooldown');
+const { shouldRetryGemini } = require('./gemini-retry');
 const {
   AI_RESPONSE_CHANNEL_ID,
   DEFAULT_GEMINI_MODEL,
@@ -4433,22 +4434,43 @@ async function handleHelpPrefixCommand(message) {
 
 async function askGemini(prompt, systemPrompt) {
   const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': process.env.GEMINI_API_KEY.trim()
-      },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: systemPrompt }] },
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        generationConfig: { maxOutputTokens: 700 }
-      }),
-      signal: AbortSignal.timeout(30000)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const request = {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': process.env.GEMINI_API_KEY.trim()
+    },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: systemPrompt }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 700 }
+    })
+  };
+  let response;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(url, {
+        ...request,
+        signal: AbortSignal.timeout(30000)
+      });
+    } catch (error) {
+      if (attempt === 0 && shouldRetryGemini(error)) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        continue;
+      }
+      if (shouldRetryGemini(error)) {
+        throw new Error('O Gemini continuou sem responder após uma nova tentativa. Tente novamente em instantes.');
+      }
+      throw error;
     }
-  );
+
+    if (attempt === 0 && shouldRetryGemini(null, response.status)) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      continue;
+    }
+    break;
+  }
 
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
