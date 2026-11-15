@@ -89,6 +89,7 @@ const {
 
 const { MusicController } = require('./music');
 const { deleteBotMessagesFromDM } = require('./dm-cleanup');
+const { shouldAnalyzeAIAttention } = require('./ai-attention-cooldown');
 const {
   AI_RESPONSE_CHANNEL_ID,
   DEFAULT_GEMINI_MODEL,
@@ -7547,23 +7548,12 @@ async function detectAttention(
 
 
 
-  const last =
-
-    aiAttentionCooldown.get(
-
-      cooldownKey
-
-    ) || 0;
-
-
-
-  if (
-
-    now - last <
-
+  if (!shouldAnalyzeAIAttention(
+    aiAttentionCooldown,
+    cooldownKey,
+    now,
     60 * 1000
-
-  ) {
+  )) {
 
     return;
 
@@ -7652,16 +7642,6 @@ Não considere simplesmente crticas, opinies ou discussóes normais como motivo 
       return;
 
     }
-
-
-
-    aiAttentionCooldown.set(
-
-      cooldownKey,
-
-      now
-
-    );
 
 
 
@@ -15631,11 +15611,13 @@ client.on(
 
 
 
-      await detectAttention(
+      void detectAttention(
 
         message
 
-      );
+      ).catch(error => {
+        console.error('[AI Attention]', error);
+      });
 
 
 
