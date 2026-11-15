@@ -1,5 +1,6 @@
 require("dotenv").config();
 
+const http = require("node:http");
 const {
   Client, GatewayIntentBits, Partials, REST, Routes,
   SlashCommandBuilder, EmbedBuilder, ActionRowBuilder,
@@ -9,9 +10,12 @@ const {
   TextDisplayBuilder, StringSelectMenuBuilder, MessageFlags, PermissionFlagsBits
 } = require("discord.js");
 const Database = require("better-sqlite3");
-const http = require("node:http");
+const {
+  entersState, joinVoiceChannel, VoiceConnectionStatus
+} = require("@discordjs/voice");
 
 const required = ["DISCORD_TOKEN", "GUILD_ID"];
+const voiceChannelId = "1571359738682286161";
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`Está faltando a variável ${key}. Configure-a no ambiente ou no arquivo .env local.`);
@@ -23,6 +27,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent
   ],
   partials: [Partials.Channel]
@@ -68,6 +73,16 @@ db.exec(`
     message_id TEXT NOT NULL,
     PRIMARY KEY (guild_id, message_id)
   );
+  CREATE TABLE IF NOT EXISTS active_mutes (
+    guild_id TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    role_id TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    moderator_id TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    role_added_by_bot INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, user_id)
+  );
 `);
 
 const postColumns = db.pragma("table_info(posts)");
@@ -81,6 +96,9 @@ const defaultPanelDescription =
 const defaultPanelFooter = "Publique apenas vídeos que você tem autorização para divulgar.";
 const defaultPanelColor = 0x000000;
 const configRoleId = "1570091171848392825";
+const muteRoleId = "1571368553926369361";
+const muteLogChannelId = "1571282224660357182";
+const maxMuteDurationMs = 28 * 24 * 60 * 60 * 1000;
 const buttonStyles = {
   Primary: ButtonStyle.Primary,
   Secondary: ButtonStyle.Secondary,
@@ -100,8 +118,377 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
   new SlashCommandBuilder()
     .setName("configurar-painel")
-    .setDescription("Abre as configurações do painel")
+    .setDescription("Abre as configurações do painel"),
+  new SlashCommandBuilder()
+    .setName("mute")
+    .setDescription("Silencia um membro temporariamente no chat e na voz")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addStringOption(option => option
+      .setName("membro")
+      .setDescription("Menção ou ID do membro")
+      .setRequired(true)
+      .setMaxLength(30))
+    .addStringOption(option => option
+      .setName("tempo")
+      .setDescription("Duração, por exemplo 1h ou 2d (máximo 28d)")
+      .setRequired(true)
+      .setMaxLength(4))
+    .addStringOption(option => option
+      .setName("motivo")
+      .setDescription("Motivo do mute")
+      .setRequired(true)
+      .setMaxLength(512)),
+  new SlashCommandBuilder()
+    .setName("unmute")
+    .setDescription("Remove o mute temporário de um membro")
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .addStringOption(option => option
+      .setName("membro")
+      .setDescription("Menção ou ID do membro")
+      .setRequired(true)
+      .setMaxLength(30))
+    .addStringOption(option => option
+      .setName("motivo")
+      .setDescription("Motivo para remover o mute")
+      .setRequired(false)
+      .setMaxLength(512))
 ];
+
+function parseMuteDuration(value) {
+  const match = /^([1-9]\d*)([hd])$/i.exec(value.trim());
+  if (!match) return null;
+
+  const amount = Number(match[1]);
+  const unit = match[2].toLowerCase();
+  const milliseconds = amount * (unit === "h" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000);
+  if (!Number.isSafeInteger(milliseconds) || milliseconds > maxMuteDurationMs) return null;
+
+  return { milliseconds, label: `${amount}${unit}` };
+}
+
+function parseMemberId(value) {
+  const trimmed = value.trim();
+  const mention = trimmed.match(/^<@!?(\d+)>$/);
+  if (mention) return mention[1];
+  return /^\d{17,20}$/.test(trimmed) ? trimmed : null;
+}
+
+function createMuteLogEmbed({ guild, title, userId, moderatorId, reason, duration, expiresAt }) {
+  const embed = new EmbedBuilder()
+    .setColor(0xed4245)
+    .setTitle(title)
+    .addFields(
+      { name: "👤 Membro", value: `<@${userId}>`, inline: true },
+      { name: "ID do membro", value: `\`${userId}\``, inline: true },
+      { name: "⏳ Tempo", value: duration, inline: true },
+      { name: "📝 Motivo", value: reason },
+      { name: "🛡️ Moderador", value: `<@${moderatorId}>`, inline: true },
+      { name: "ID do moderador", value: `\`${moderatorId}\``, inline: true }
+    )
+    .setFooter({ text: guild.name })
+    .setTimestamp();
+
+  if (expiresAt) {
+    embed.addFields({
+      name: "Vencimento",
+      value: `<t:${Math.floor(expiresAt / 1000)}:F> • <t:${Math.floor(expiresAt / 1000)}:R>`
+    });
+  }
+
+  return embed;
+}
+
+async function sendMuteLog(guild, embed) {
+  const channel = await guild.channels.fetch(muteLogChannelId);
+  if (!channel?.isTextBased()) {
+    throw new Error(`O canal de registro ${muteLogChannelId} não está acessível.`);
+  }
+  await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+}
+
+async function getMuteRoleAndBotMember(guild) {
+  const [role, botMember] = await Promise.all([
+    guild.roles.fetch(muteRoleId),
+    guild.members.fetchMe()
+  ]);
+  if (!role) throw new Error(`O cargo de mute ${muteRoleId} não existe neste servidor.`);
+  if (!botMember.permissions.has(PermissionFlagsBits.ModerateMembers)) {
+    throw new Error("O bot precisa da permissão Moderar Membros.");
+  }
+  if (!botMember.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    throw new Error("O bot precisa da permissão Gerenciar Cargos.");
+  }
+  if (role.position >= botMember.roles.highest.position) {
+    throw new Error("Mova o cargo do bot para cima do cargo de mute.");
+  }
+  return { role, botMember };
+}
+
+function canModerateMember(target, moderator, botMember, guild) {
+  if (target.id === guild.ownerId || target.id === botMember.id) return false;
+  if (target.roles.highest.comparePositionTo(botMember.roles.highest) >= 0) return false;
+  return moderator.id === guild.ownerId ||
+    target.roles.highest.comparePositionTo(moderator.roles.highest) < 0;
+}
+
+async function handleMuteCommand(interaction) {
+  if (!interaction.inGuild() || !interaction.guild) {
+    return interaction.reply({ content: "Este comando só pode ser usado no servidor.", ephemeral: true });
+  }
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+    return interaction.reply({ content: "Você precisa da permissão Moderar Membros.", ephemeral: true });
+  }
+
+  const duration = parseMuteDuration(interaction.options.getString("tempo", true));
+  if (!duration) {
+    return interaction.reply({
+      content: "Informe o tempo como `1h` ou `2d`. O limite do Discord é 28 dias.",
+      ephemeral: true
+    });
+  }
+
+  const userId = parseMemberId(interaction.options.getString("membro", true));
+  if (!userId) {
+    return interaction.reply({ content: "Informe uma menção ou um ID de membro válido.", ephemeral: true });
+  }
+  const reason = interaction.options.getString("motivo", true).trim();
+  if (!reason) {
+    return interaction.reply({ content: "Informe o motivo do mute.", ephemeral: true });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  const guild = interaction.guild;
+  try {
+    const [target, moderator, { role, botMember }] = await Promise.all([
+      guild.members.fetch(userId),
+      guild.members.fetch(interaction.user.id),
+      getMuteRoleAndBotMember(guild)
+    ]);
+    if (!canModerateMember(target, moderator, botMember, guild)) {
+      return interaction.editReply("Não posso aplicar mute nesse membro por causa da hierarquia de cargos.");
+    }
+
+    const now = Date.now();
+    const expiresAt = now + duration.milliseconds;
+    const previousTimeout = target.communicationDisabledUntilTimestamp;
+    if (previousTimeout && previousTimeout > expiresAt) {
+      return interaction.editReply("Esse membro já tem um timeout que termina depois do prazo informado.");
+    }
+
+    const existingMute = db.prepare(
+      "SELECT role_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+    ).get(guild.id, target.id);
+    const hadMuteRole = target.roles.cache.has(role.id);
+    const roleAddedByBot = existingMute
+      ? Boolean(existingMute.role_added_by_bot)
+      : !hadMuteRole;
+    let timeoutApplied = false;
+    let roleAdded = false;
+
+    try {
+      await target.timeout(duration.milliseconds, reason);
+      timeoutApplied = true;
+      if (!hadMuteRole) {
+        await target.roles.add(role, reason);
+        roleAdded = true;
+      }
+      db.prepare(`
+        INSERT INTO active_mutes (guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(guild_id, user_id) DO UPDATE SET
+          role_id = excluded.role_id,
+          reason = excluded.reason,
+          moderator_id = excluded.moderator_id,
+          expires_at = excluded.expires_at,
+          role_added_by_bot = excluded.role_added_by_bot
+      `).run(
+        guild.id,
+        target.id,
+        role.id,
+        reason,
+        moderator.id,
+        expiresAt,
+        roleAddedByBot ? 1 : 0
+      );
+    } catch (error) {
+      if (roleAdded) {
+        await target.roles.remove(role, "Revertendo mute incompleto")
+          .catch(rollbackError => console.error("Falha ao reverter o cargo de mute:", rollbackError));
+      }
+      if (timeoutApplied) {
+        const remainingTimeout = previousTimeout && previousTimeout > Date.now()
+          ? previousTimeout - Date.now()
+          : null;
+        await target.timeout(remainingTimeout, "Revertendo mute incompleto")
+          .catch(rollbackError => console.error("Falha ao reverter o timeout:", rollbackError));
+      }
+      throw error;
+    }
+
+    const logEmbed = createMuteLogEmbed({
+      guild,
+      title: "🔇 Membro mutado em canais de texto e voz",
+      userId: target.id,
+      moderatorId: moderator.id,
+      reason,
+      duration: duration.label,
+      expiresAt
+    });
+    let logWarning = "";
+    try {
+      await sendMuteLog(guild, logEmbed);
+    } catch (error) {
+      console.error("Mute aplicado, mas não foi possível enviar o registro:", error);
+      logWarning = " Não consegui enviar o registro; confira o acesso do bot ao canal de logs.";
+    }
+
+    return interaction.editReply(
+      `🔇 <@${target.id}> foi silenciado por ${duration.label}. Motivo: ${reason}.${logWarning}`
+    );
+  } catch (error) {
+    console.error("Não foi possível aplicar o mute:", error);
+    return interaction.editReply(`Não consegui aplicar o mute: ${error.message}`);
+  }
+}
+
+async function handleUnmuteCommand(interaction) {
+  if (!interaction.inGuild() || !interaction.guild) {
+    return interaction.reply({ content: "Este comando só pode ser usado no servidor.", ephemeral: true });
+  }
+  if (!interaction.memberPermissions?.has(PermissionFlagsBits.ModerateMembers)) {
+    return interaction.reply({ content: "Você precisa da permissão Moderar Membros.", ephemeral: true });
+  }
+
+  const userId = parseMemberId(interaction.options.getString("membro", true));
+  if (!userId) {
+    return interaction.reply({ content: "Informe uma menção ou um ID de membro válido.", ephemeral: true });
+  }
+  const reason = interaction.options.getString("motivo")?.trim() || "Mute removido manualmente.";
+
+  await interaction.deferReply({ ephemeral: true });
+  const guild = interaction.guild;
+  try {
+    const [target, moderator, { role, botMember }] = await Promise.all([
+      guild.members.fetch(userId),
+      guild.members.fetch(interaction.user.id),
+      getMuteRoleAndBotMember(guild)
+    ]);
+    if (!canModerateMember(target, moderator, botMember, guild)) {
+      return interaction.editReply("Não posso remover o mute desse membro por causa da hierarquia de cargos.");
+    }
+
+    const muteRecord = db.prepare(
+      "SELECT expires_at FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+    ).get(guild.id, target.id);
+    const previousTimeout = target.communicationDisabledUntilTimestamp;
+    const hasTimeout = previousTimeout && previousTimeout > Date.now();
+    const hadMuteRole = target.roles.cache.has(role.id);
+    if (!hasTimeout && !hadMuteRole && !muteRecord) {
+      return interaction.editReply("Esse membro não tem um mute ativo.");
+    }
+
+    let roleRemoved = false;
+    let timeoutCleared = false;
+    try {
+      if (hadMuteRole) {
+        await target.roles.remove(role, reason);
+        roleRemoved = true;
+      }
+      if (hasTimeout) {
+        await target.timeout(null, reason);
+        timeoutCleared = true;
+      }
+      db.prepare("DELETE FROM active_mutes WHERE guild_id = ? AND user_id = ?")
+        .run(guild.id, target.id);
+    } catch (error) {
+      if (roleRemoved) {
+        await target.roles.add(role, "Revertendo unmute incompleto")
+          .catch(rollbackError => console.error("Falha ao restaurar o cargo de mute:", rollbackError));
+      }
+      if (timeoutCleared && previousTimeout > Date.now()) {
+        await target.timeout(previousTimeout - Date.now(), "Revertendo unmute incompleto")
+          .catch(rollbackError => console.error("Falha ao restaurar o timeout:", rollbackError));
+      }
+      throw error;
+    }
+
+    const logEmbed = createMuteLogEmbed({
+      guild,
+      title: "🔊 Mute removido",
+      userId: target.id,
+      moderatorId: moderator.id,
+      reason,
+      duration: muteRecord
+        ? `Removido antes do vencimento (<t:${Math.floor(muteRecord.expires_at / 1000)}:R>)`
+        : "Removido manualmente"
+    });
+    try {
+      await sendMuteLog(guild, logEmbed);
+    } catch (error) {
+      console.error("Unmute aplicado, mas não foi possível enviar o registro:", error);
+      return interaction.editReply("Mute removido, mas não consegui enviar o registro no canal de logs.");
+    }
+    return interaction.editReply(`🔊 O mute de <@${target.id}> foi removido.`);
+  } catch (error) {
+    console.error("Não foi possível remover o mute:", error);
+    return interaction.editReply(`Não consegui remover o mute: ${error.message}`);
+  }
+}
+
+async function expireTimedMutes() {
+  const expiredMutes = db.prepare(
+    "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot FROM active_mutes WHERE expires_at <= ?"
+  ).all(Date.now());
+
+  for (const expiredMute of expiredMutes) {
+    try {
+      const currentMute = db.prepare(
+        "SELECT guild_id, user_id, role_id, reason, moderator_id, expires_at, role_added_by_bot FROM active_mutes WHERE guild_id = ? AND user_id = ?"
+      ).get(expiredMute.guild_id, expiredMute.user_id);
+      if (!currentMute || currentMute.expires_at > Date.now()) continue;
+
+      const guild = await client.guilds.fetch(currentMute.guild_id);
+      let member;
+      try {
+        member = await guild.members.fetch(currentMute.user_id);
+      } catch (error) {
+        if (error.code === 10007) {
+          db.prepare("DELETE FROM active_mutes WHERE guild_id = ? AND user_id = ?")
+            .run(currentMute.guild_id, currentMute.user_id);
+          continue;
+        }
+        throw error;
+      }
+
+      if (currentMute.role_added_by_bot && member.roles.cache.has(currentMute.role_id)) {
+        await member.roles.remove(currentMute.role_id, "Mute temporário expirado");
+      }
+      const deletion = db.prepare(
+        "DELETE FROM active_mutes WHERE guild_id = ? AND user_id = ? AND expires_at = ?"
+      ).run(currentMute.guild_id, currentMute.user_id, currentMute.expires_at);
+      if (!deletion.changes) continue;
+
+      try {
+        await sendMuteLog(guild, createMuteLogEmbed({
+          guild,
+          title: "✅ Mute temporário expirado",
+          userId: currentMute.user_id,
+          moderatorId: currentMute.moderator_id,
+          reason: currentMute.reason,
+          duration: "Expirado",
+          expiresAt: currentMute.expires_at
+        }));
+      } catch (error) {
+        console.error("Mute expirou, mas não foi possível enviar o registro:", error);
+      }
+    } catch (error) {
+      console.error(
+        `Não foi possível expirar o mute de ${expiredMute.user_id}:`,
+        error
+      );
+    }
+  }
+}
 
 function getGuildConfig(guildId) {
   const rows = db.prepare(
@@ -559,6 +946,33 @@ client.once("ready", async () => {
     console.error("Erro ao registrar comandos:", error);
   }
 
+  let voiceConnection;
+  try {
+    const channel = await client.channels.fetch(voiceChannelId);
+    if (!channel?.isVoiceBased()) {
+      throw new Error(`O canal ${voiceChannelId} não existe ou não é um canal de voz.`);
+    }
+
+    voiceConnection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: true,
+      selfMute: true
+    });
+    await entersState(voiceConnection, VoiceConnectionStatus.Ready, 30_000);
+    console.log(`Conectado à call ${channel.name} (${channel.id}), sem áudio.`);
+  } catch (error) {
+    voiceConnection?.destroy();
+    console.error(`Não foi possível entrar na call ${voiceChannelId}:`, error);
+  }
+
+  await expireTimedMutes();
+  const muteExpiryTimer = setInterval(() => {
+    expireTimedMutes().catch(error => console.error("Erro ao verificar mutes expirados:", error));
+  }, 30_000);
+  muteExpiryTimer.unref();
+
   const existingPosts = db.prepare("SELECT id FROM posts WHERE message_id IS NOT NULL").all();
   for (const post of existingPosts) await refreshPost(post.id);
   if (existingPosts.length) {
@@ -568,6 +982,14 @@ client.once("ready", async () => {
 
 client.on("interactionCreate", async interaction => {
   try {
+    if (interaction.isChatInputCommand() && interaction.commandName === "mute") {
+      return await handleMuteCommand(interaction);
+    }
+
+    if (interaction.isChatInputCommand() && interaction.commandName === "unmute") {
+      return await handleUnmuteCommand(interaction);
+    }
+
     if (interaction.isChatInputCommand() && interaction.commandName === "configurar-painel") {
       if (!interaction.inGuild() || !memberHasConfigRole(interaction.member)) {
         return interaction.reply({ content: "Somente membros com o cargo autorizado podem alterar as configurações.", ephemeral: true });

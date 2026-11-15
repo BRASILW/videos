@@ -9,6 +9,8 @@
 - O botão "Ver curtidas" abre uma lista paginada com menções, sem notificar as pessoas.
 - Botões para curtir/descurtir, comentar e ver os 10 comentários mais recentes.
 - Curtidas e comentários ficam salvos em SQLite (`influenciadores.sqlite`).
+- O bot entra na call `1571359738682286161` sem áudio quando inicia.
+- `/mute` aplica timeout de chat e voz e o cargo `1571368553926369361`; `/unmute` remove o mute.
 - `!emj emoji nome` ou `!emj figurinha nome tag` adiciona um arquivo anexado ao servidor (somente conteúdo próprio ou autorizado; requer **Gerenciar expressões**).
 
 ## Instalação
@@ -32,6 +34,13 @@
 - As alterações são salvas por servidor no SQLite e aplicadas automaticamente aos painéis e publicações existentes; não é necessário executar `!painel` novamente.
 - O destaque dos cartões de publicação e a cor padrão do painel são pretos.
 
+## Moderação
+- Moderadores com a permissão **Moderate Members** podem usar `/mute membro motivo duração` e `/unmute membro motivo`.
+- O membro pode ser selecionado pela lista do Discord. A duração aceita horas ou dias, por exemplo `1h` ou `2d`, até o limite de 28 dias do timeout nativo.
+- O mute bloqueia mensagens e voz pelo timeout do Discord, aplica o cargo `1571368553926369361` e registra o motivo e vencimento no canal `1571282224660357182`.
+- O bot precisa das permissões **Moderate Members** e **Manage Roles**. O cargo do bot deve ficar acima do cargo de mute e dos membros moderados; o cargo de mute e o canal de registro também precisam existir e estar acessíveis.
+- A remoção automática do cargo é persistida em SQLite. Em hospedagens sem disco persistente, um reinício pode perder essa agenda; o timeout nativo ainda expira no Discord.
+
 ## Deploy no Render
 Este bot fica isolado em `influenciadores-bot/` para não substituir o aplicativo já existente na raiz do repositório `BRASILW/videos`. Para usar o plano gratuito, crie um **Web Service** ligado à branch do bot e configure **Root Directory** como `influenciadores-bot`, `npm install` como Build Command e `npm start` como Start Command. Selecione o plano **Free** e defina `DISCORD_TOKEN` e `GUILD_ID` nas variáveis de ambiente do Render. O ID do aplicativo é obtido automaticamente do bot autenticado. `POST_CHANNEL_ID` é opcional.
 
@@ -42,4 +51,4 @@ O serviço expõe `/health` para o Render. O plano gratuito não mantém o bot s
 - O bot precisa ter acesso ao canal de publicações.
 - Para `!emj`, anexe o arquivo ao comando: emoji aceita PNG/JPG/GIF até 256 KB; figurinha aceita PNG/APNG/JSON/GIF até 512 KB. Exemplo: `!emj figurinha ola wave`.
 - Em hospedagens sem disco persistente, o banco SQLite pode ser perdido em novos deploys, reinicializações ou períodos de suspensão.
-- Este é um projeto-base. Adicione moderação e limites de uso conforme as regras do seu servidor.
+- O bot precisa ter permissão **Connect** no canal de voz configurado e estar acima dos cargos que gerencia.
