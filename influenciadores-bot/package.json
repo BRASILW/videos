@@ -7,8 +7,11 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.8.1",
+    "better-sqlite3": "^12.11.1",
     "discord.js": "^14.19.3",
     "dotenv": "^16.4.7"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
   }
 }

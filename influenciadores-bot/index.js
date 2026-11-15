@@ -11,7 +11,7 @@ const {
 const Database = require("better-sqlite3");
 const http = require("node:http");
 
-const required = ["DISCORD_TOKEN", "CLIENT_ID", "GUILD_ID"];
+const required = ["DISCORD_TOKEN", "GUILD_ID"];
 for (const key of required) {
   if (!process.env[key]) {
     console.error(`Está faltando a variável ${key}. Configure-a no ambiente ou no arquivo .env local.`);
@@ -551,7 +551,7 @@ client.once("ready", async () => {
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+      Routes.applicationGuildCommands(client.user.id, process.env.GUILD_ID),
       { body: commands.map(command => command.toJSON()) }
     );
     console.log("Comando /painel registrado.");
