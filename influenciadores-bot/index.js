@@ -27,6 +27,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildInvites,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.MessageContent
   ],
@@ -83,6 +85,12 @@ db.exec(`
     role_added_by_bot INTEGER NOT NULL,
     voice_mute_added_by_bot INTEGER,
     PRIMARY KEY (guild_id, user_id)
+  );
+  CREATE TABLE IF NOT EXISTS guild_invite_uses (
+    guild_id TEXT NOT NULL,
+    invite_code TEXT NOT NULL,
+    uses INTEGER NOT NULL,
+    PRIMARY KEY (guild_id, invite_code)
   );
 `);
 
@@ -217,13 +225,135 @@ function createMuteDmEmbed({ guild, reason, duration, expiresAt }) {
     .setTimestamp();
 }
 
-async function sendMuteLog(guild, embed) {
+async function sendServerLog(guild, embed) {
   const channel = await guild.channels.fetch(muteLogChannelId);
   if (!channel?.isTextBased()) {
     throw new Error(`O canal de registro ${muteLogChannelId} não está acessível.`);
   }
   await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
 }
+
+function saveInviteSnapshot(guildId, invites) {
+  const replaceSnapshot = db.transaction(() => {
+    db.prepare("DELETE FROM guild_invite_uses WHERE guild_id = ?").run(guildId);
+    const insert = db.prepare(`
+      INSERT INTO guild_invite_uses (guild_id, invite_code, uses)
+      VALUES (?, ?, ?)
+    `);
+    for (const invite of invites.values()) {
+      insert.run(guildId, invite.code, invite.uses || 0);
+    }
+  });
+  replaceSnapshot();
+}
+
+function saveSingleInviteUse(guildId, invite) {
+  db.prepare(`
+    INSERT INTO guild_invite_uses (guild_id, invite_code, uses)
+    VALUES (?, ?, ?)
+    ON CONFLICT(guild_id, invite_code) DO UPDATE SET uses = excluded.uses
+  `).run(guildId, invite.code, invite.uses || 0);
+}
+
+async function initializeInviteSnapshots() {
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const invites = await guild.invites.fetch();
+      saveInviteSnapshot(guild.id, invites);
+    } catch (error) {
+      db.prepare("DELETE FROM guild_invite_uses WHERE guild_id = ?").run(guild.id);
+      console.error(`Não foi possível carregar os convites do servidor ${guild.id}:`, error);
+    }
+  }
+}
+
+async function handleGuildMemberJoin(member) {
+  let usedInvite = null;
+  let inviter = null;
+  try {
+    await inviteSnapshotInitialization;
+    const previousUses = new Map(
+      db.prepare("SELECT invite_code, uses FROM guild_invite_uses WHERE guild_id = ?")
+        .all(member.guild.id)
+        .map(row => [row.invite_code, row.uses])
+    );
+    const currentInvites = await member.guild.invites.fetch();
+    const increases = [...currentInvites.values()].filter(invite =>
+      previousUses.has(invite.code) && (invite.uses || 0) > previousUses.get(invite.code)
+    );
+    if (increases.length === 1) {
+      usedInvite = increases[0];
+      inviter = usedInvite.inviter;
+    }
+    saveInviteSnapshot(member.guild.id, currentInvites);
+  } catch (error) {
+    db.prepare("DELETE FROM guild_invite_uses WHERE guild_id = ?").run(member.guild.id);
+    console.error(`Não foi possível identificar o convite usado por ${member.id}:`, error);
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(0x57f287)
+    .setTitle("Novo membro entrou no servidor")
+    .addFields(
+      { name: "Membro", value: `<@${member.id}> (\`${member.id}\`)` },
+      {
+        name: "Convidado por",
+        value: inviter ? `<@${inviter.id}> (\`${inviter.id}\`)` : "Não identificado",
+        inline: true
+      },
+      {
+        name: "Link usado",
+        value: usedInvite ? `https://discord.gg/${usedInvite.code}` : "Não identificado",
+        inline: true
+      },
+      {
+        name: "Conta criada",
+        value: `<t:${Math.floor(member.user.createdTimestamp / 1000)}:F>`,
+        inline: false
+      }
+    )
+    .setThumbnail(member.user.displayAvatarURL())
+    .setTimestamp();
+
+  try {
+    await sendServerLog(member.guild, embed);
+  } catch (error) {
+    console.error(`Não foi possível registrar a entrada de ${member.id}:`, error);
+  }
+}
+
+async function handleInviteCreated(invite) {
+  if (!invite.guild) return;
+
+  saveSingleInviteUse(invite.guild.id, invite);
+  const inviterId = invite.inviter?.id;
+  const embed = new EmbedBuilder()
+    .setColor(0x3498db)
+    .setTitle("Link de convite criado")
+    .addFields(
+      { name: "Criado por", value: inviterId ? `<@${inviterId}> (\`${inviterId}\`)` : "Não identificado", inline: true },
+      { name: "Canal", value: invite.channelId ? `<#${invite.channelId}>` : "Não identificado", inline: true },
+      { name: "Link", value: `https://discord.gg/${invite.code}` },
+      { name: "Usos máximos", value: invite.maxUses ? String(invite.maxUses) : "Ilimitado", inline: true },
+      {
+        name: "Expira",
+        value: invite.expiresTimestamp
+          ? `<t:${Math.floor(invite.expiresTimestamp / 1000)}:F>`
+          : "Nunca",
+        inline: true
+      }
+    )
+    .setTimestamp();
+
+  try {
+    await sendServerLog(invite.guild, embed);
+  } catch (error) {
+    console.error(`Não foi possível registrar a criação do convite ${invite.code}:`, error);
+  }
+}
+
+let inviteSnapshotInitialization = Promise.resolve();
+let inviteTrackingQueue = Promise.resolve();
 
 async function getMuteRoleAndBotMember(guild) {
   const [role, botMember] = await Promise.all([
@@ -370,7 +500,7 @@ async function handleMuteCommand(interaction) {
     });
     const warnings = [];
     try {
-      await sendMuteLog(guild, logEmbed);
+      await sendServerLog(guild, logEmbed);
     } catch (error) {
       console.error("Mute aplicado, mas não foi possível enviar o registro:", error);
       warnings.push("Não consegui enviar o registro; confira o acesso do bot ao canal de logs.");
@@ -485,7 +615,7 @@ async function handleUnmuteCommand(interaction) {
         : "Removido manualmente"
     });
     try {
-      await sendMuteLog(guild, logEmbed);
+      await sendServerLog(guild, logEmbed);
     } catch (error) {
       console.error("Unmute aplicado, mas não foi possível enviar o registro:", error);
       return interaction.editReply("Mute removido, mas não consegui enviar o registro no canal de logs.");
@@ -539,7 +669,7 @@ async function expireTimedMutes() {
       if (!deletion.changes) continue;
 
       try {
-        await sendMuteLog(guild, createMuteLogEmbed({
+        await sendServerLog(guild, createMuteLogEmbed({
           guild,
           title: "✅ Mute temporário expirado",
           userId: currentMute.user_id,
@@ -1005,6 +1135,11 @@ async function refreshGuildConfiguration(guildId) {
 
 client.once("ready", async () => {
   console.log(`Bot conectado como ${client.user.tag}`);
+  inviteSnapshotInitialization = initializeInviteSnapshots().catch(error => {
+    console.error("Não foi possível inicializar o rastreamento de convites:", error);
+  });
+  await inviteSnapshotInitialization;
+
   const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
   try {
     await rest.put(
@@ -1048,6 +1183,19 @@ client.once("ready", async () => {
   if (existingPosts.length) {
     console.log(`Botões atualizados em ${existingPosts.length} publicações.`);
   }
+});
+
+client.on("guildMemberAdd", member => {
+  if (member.user.bot) return;
+  inviteTrackingQueue = inviteTrackingQueue
+    .then(() => handleGuildMemberJoin(member))
+    .catch(error => console.error(`Erro ao registrar a entrada de ${member.id}:`, error));
+});
+
+client.on("inviteCreate", invite => {
+  handleInviteCreated(invite).catch(error => {
+    console.error(`Erro ao registrar a criação do convite ${invite.code}:`, error);
+  });
 });
 
 client.on("interactionCreate", async interaction => {
