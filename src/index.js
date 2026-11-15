@@ -90,6 +90,11 @@ const {
 const { MusicController } = require('./music');
 const { deleteBotMessagesFromDM } = require('./dm-cleanup');
 const {
+  AI_RESPONSE_CHANNEL_ID,
+  DEFAULT_GEMINI_MODEL,
+  isAIResponseChannel
+} = require('./ai-settings');
+const {
   downloadPack,
   summarizeUploadResults,
   uploadPack
@@ -4426,7 +4431,7 @@ async function handleHelpPrefixCommand(message) {
 
 
 async function askGemini(prompt, systemPrompt) {
-  const model = process.env.GEMINI_MODEL?.trim() || 'gemini-2.5-flash';
+  const model = process.env.GEMINI_MODEL?.trim() || DEFAULT_GEMINI_MODEL;
   const response = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
     {
@@ -12802,9 +12807,14 @@ async function handleSlashCommand(
 
 
   if (command === 'ask') {
+    if (!isAIResponseChannel(interaction.channelId)) {
+      return interaction.reply({
+        content: `A IA responde somente no canal <#${AI_RESPONSE_CHANNEL_ID}>.`,
+        ephemeral: Boolean(interaction.guild)
+      });
+    }
 
     const question =
-
       interaction.options.getString(
 
         'pergunta',
@@ -16342,11 +16352,8 @@ client.on(
 
 
       if (
-
-        mentionedBot ||
-
-        repliedToBot
-
+        (mentionedBot || repliedToBot) &&
+        isAIResponseChannel(message.channelId)
       ) {
 
         if (
