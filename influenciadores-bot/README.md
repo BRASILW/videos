@@ -35,7 +35,7 @@
 - O destaque dos cartões de publicação e a cor padrão do painel são pretos.
 
 ## Moderação
-- Moderadores com a permissão **Moderate Members** podem usar `/mute membro motivo duração` e `/unmute membro motivo`.
+- Moderadores com a permissão **Moderate Members** podem usar `/mute membro tempo motivo` e `/unmute membro motivo`.
 - O membro pode ser selecionado pela lista do Discord. A duração aceita horas ou dias, por exemplo `1h` ou `2d`, até o limite de 28 dias do timeout nativo.
 - O mute bloqueia mensagens e voz pelo timeout do Discord, aplica o cargo `1571368553926369361` e registra o motivo e vencimento no canal `1571282224660357182`.
 - O bot precisa das permissões **Moderate Members** e **Manage Roles**. O cargo do bot deve ficar acima do cargo de mute e dos membros moderados; o cargo de mute e o canal de registro também precisam existir e estar acessíveis.
